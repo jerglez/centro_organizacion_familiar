@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Centro de Organización Familiar</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --azul: #185FA5;
+    --azul-oscuro: #0F3D6B;
+    --fondo: #F5F7FA;
+    --texto: #1B2430;
+    --texto-secundario: #5F6B7A;
+    --borde: #DDE3EA;
+    --error: #B3261E;
+    --exito: #1E7A46;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--fondo);
+    color: var(--texto);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+  }
+  .tarjeta {
+    background: #fff;
+    border-radius: 16px;
+    border: 1px solid var(--borde);
+    padding: 2rem 1.75rem;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+  }
+  h1 {
+    font-size: 1.3rem;
+    margin: 0 0 0.4rem;
+    color: var(--azul-oscuro);
+  }
+  p.subtitulo {
+    color: var(--texto-secundario);
+    font-size: 0.9rem;
+    margin: 0 0 1.5rem;
+  }
+  #app-screen { display: none; text-align: left; }
+  #bienvenida {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+  #rol {
+    display: inline-block;
+    background: #E6F1FB;
+    color: var(--azul);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+  #resultado {
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 0.9rem;
+    font-size: 0.85rem;
+    margin-top: 1rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #resultado.error { color: var(--error); border-color: #F3D3D0; background: #FCEEEC; }
+  #resultado.ok { color: var(--exito); border-color: #CDE9D8; background: #EEF8F1; }
+  button.secundario {
+    background: none;
+    border: 1px solid var(--borde);
+    color: var(--texto-secundario);
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    margin-top: 1rem;
+  }
+  .g_id_signin { display: flex; justify-content: center; }
+</style>
+</head>
+<body>
+
+<div class="tarjeta">
+  <div id="login-screen">
+    <h1>Centro de Organización Familiar</h1>
+    <p class="subtitulo">Inicia sesión con tu cuenta de Google para continuar</p>
+
+    <div id="g_id_onload"
+         data-client_id="PEGA_AQUI_TU_CLIENT_ID.apps.googleusercontent.com"
+         data-callback="manejarLogin">
+    </div>
+    <div class="g_id_signin" data-type="standard" data-theme="outline" data-size="large"></div>
+  </div>
+
+  <div id="app-screen">
+    <p id="bienvenida"></p>
+    <span id="rol"></span>
+    <div id="resultado"></div>
+    <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
+  </div>
+</div>
+
+<script>
+  // Pega aqui la URL /exec que copiaste al publicar tu Apps Script
+  const API_URL = "PEGA_AQUI_TU_URL_TERMINADA_EN_/exec";
+
+  let tokenActual = null;
+
+  function manejarLogin(response) {
+    tokenActual = response.credential;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'block';
+    probarConexion();
+  }
+
+  async function llamarAPI(accion, payload) {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      // Importante: text/plain evita el preflight CORS que Apps Script no maneja bien
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ accion: accion, token: tokenActual, payload: payload || {} })
+    });
+    return res.json();
+  }
+
+  async function probarConexion() {
+    const resultadoEl = document.getElementById('resultado');
+    try {
+      const data = await llamarAPI('getUsuarioActual');
+      if (data.ok) {
+        document.getElementById('bienvenida').textContent = 'Hola, ' + data.datos.nombre;
+        document.getElementById('rol').textContent = data.datos.rol;
+        resultadoEl.className = 'ok';
+        resultadoEl.textContent = 'Conexión exitosa. La API respondió correctamente:\n\n' + JSON.stringify(data.datos, null, 2);
+      } else {
+        resultadoEl.className = 'error';
+        resultadoEl.textContent = 'Error: ' + data.error;
+      }
+    } catch (err) {
+      resultadoEl.className = 'error';
+      resultadoEl.textContent = 'No se pudo conectar con la API. Revisa que la URL sea correcta.\n\n' + err.message;
+    }
+  }
+
+  function cerrarSesion() {
+    tokenActual = null;
+    document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'block';
+    document.getElementById('resultado').textContent = '';
+    document.getElementById('resultado').className = '';
+  }
+</script>
+
+</body>
+</html>
