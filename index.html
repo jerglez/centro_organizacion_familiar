@@ -203,6 +203,15 @@
   #mensaje-estado.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
   #mensaje-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
   .vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
+
+  /* ---------- Pie de version ---------- */
+  footer#pie-version {
+    text-align: center;
+    color: var(--texto-secundario);
+    font-size: 0.72rem;
+    margin-top: 2rem;
+    padding-bottom: 1rem;
+  }
 </style>
 </head>
 <body>
@@ -284,9 +293,18 @@
   </section>
 </div>
 
+<footer id="pie-version"></footer>
+
 <script>
   // Pega aqui la URL /exec que copiaste al publicar tu Apps Script
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
+
+  // Actualiza estos dos valores cada vez que subas una nueva version del HTML
+  const VERSION_APP = "1.1";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 10:40 am";
+
+  document.getElementById('pie-version').textContent =
+    "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
 
   let tokenActual = null;
   let categoriasCache = [];
