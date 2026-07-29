@@ -9,12 +9,14 @@
   :root {
     --azul: #185FA5;
     --azul-oscuro: #0F3D6B;
+    --verde: #1E7A46;
+    --verde-fondo: #EEF8F1;
+    --rojo: #B3261E;
+    --rojo-fondo: #FCEEEC;
     --fondo: #F5F7FA;
     --texto: #1B2430;
     --texto-secundario: #5F6B7A;
     --borde: #DDE3EA;
-    --error: #B3261E;
-    --exito: #1E7A46;
   }
   * { box-sizing: border-box; }
   body {
@@ -23,91 +25,226 @@
     background: var(--fondo);
     color: var(--texto);
     min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 1.25rem;
   }
-  .tarjeta {
+
+  /* ---------- Pantalla de login ---------- */
+  #login-screen {
+    max-width: 380px;
+    margin: 4rem auto 0;
     background: #fff;
     border-radius: 16px;
     border: 1px solid var(--borde);
     padding: 2rem 1.75rem;
-    max-width: 420px;
-    width: 100%;
     text-align: center;
   }
-  h1 {
-    font-size: 1.3rem;
-    margin: 0 0 0.4rem;
-    color: var(--azul-oscuro);
+  #login-screen h1 { font-size: 1.3rem; margin: 0 0 0.4rem; color: var(--azul-oscuro); }
+  #login-screen p { color: var(--texto-secundario); font-size: 0.9rem; margin: 0 0 1.5rem; }
+  .g_id_signin { display: flex; justify-content: center; }
+
+  /* ---------- Pantalla principal ---------- */
+  #app-screen { display: none; max-width: 720px; margin: 0 auto; }
+
+  header.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
   }
-  p.subtitulo {
-    color: var(--texto-secundario);
-    font-size: 0.9rem;
-    margin: 0 0 1.5rem;
-  }
-  #app-screen { display: none; text-align: left; }
-  #bienvenida {
-    font-size: 1.05rem;
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-  }
-  #rol {
+  header.app-header h2 { font-size: 1.1rem; margin: 0; }
+  header.app-header .rol {
     display: inline-block;
     background: #E6F1FB;
     color: var(--azul);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    padding: 2px 10px;
+    padding: 2px 9px;
     border-radius: 999px;
-    margin-bottom: 1rem;
+    margin-left: 8px;
   }
-  #resultado {
-    background: var(--fondo);
-    border: 1px solid var(--borde);
-    border-radius: 10px;
-    padding: 0.9rem;
-    font-size: 0.85rem;
-    margin-top: 1rem;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-  #resultado.error { color: var(--error); border-color: #F3D3D0; background: #FCEEEC; }
-  #resultado.ok { color: var(--exito); border-color: #CDE9D8; background: #EEF8F1; }
   button.secundario {
     background: none;
     border: 1px solid var(--borde);
     color: var(--texto-secundario);
-    padding: 0.5rem 0.9rem;
+    padding: 0.45rem 0.85rem;
     border-radius: 8px;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+
+  /* ---------- Tarjetas resumen ---------- */
+  .resumen {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .resumen .tarjeta {
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+  }
+  .resumen .tarjeta span.label { font-size: 0.72rem; color: var(--texto-secundario); display: block; margin-bottom: 4px; }
+  .resumen .tarjeta span.valor { font-size: 1.15rem; font-weight: 700; }
+  .resumen .tarjeta.saldo span.valor { color: var(--azul-oscuro); }
+  .resumen .tarjeta.ingresos span.valor { color: var(--verde); }
+  .resumen .tarjeta.gastos span.valor { color: var(--rojo); }
+
+  /* ---------- Formulario ---------- */
+  section.bloque {
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 14px;
+    padding: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+  section.bloque h3 { margin: 0 0 1rem; font-size: 0.95rem; color: var(--azul-oscuro); }
+
+  form#form-transaccion { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-transaccion .campo-ancho { grid-column: 1 / -1; }
+  form#form-transaccion label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--texto-secundario);
+    margin-bottom: 4px;
+  }
+  form#form-transaccion input,
+  form#form-transaccion select {
+    width: 100%;
+    padding: 0.55rem 0.6rem;
+    border-radius: 8px;
+    border: 1px solid var(--borde);
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+  .tipo-toggle { display: flex; gap: 0.5rem; }
+  .tipo-toggle button {
+    flex: 1;
+    padding: 0.55rem;
+    border-radius: 8px;
+    border: 1px solid var(--borde);
+    background: #fff;
     font-size: 0.85rem;
     cursor: pointer;
-    margin-top: 1rem;
+    color: var(--texto-secundario);
   }
-  .g_id_signin { display: flex; justify-content: center; }
+  .tipo-toggle button.activo.ingreso { background: var(--verde-fondo); border-color: var(--verde); color: var(--verde); }
+  .tipo-toggle button.activo.gasto { background: var(--rojo-fondo); border-color: var(--rojo); color: var(--rojo); }
+
+  button.guardar {
+    grid-column: 1 / -1;
+    background: var(--azul);
+    color: #fff;
+    border: none;
+    padding: 0.7rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.25rem;
+  }
+  button.guardar:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* ---------- Lista de transacciones ---------- */
+  ul#lista-transacciones { list-style: none; margin: 0; padding: 0; }
+  ul#lista-transacciones li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid var(--borde);
+  }
+  ul#lista-transacciones li:last-child { border-bottom: none; }
+  .item-info .categoria { font-size: 0.9rem; font-weight: 600; }
+  .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); }
+  .item-monto { font-weight: 700; font-size: 0.95rem; }
+  .item-monto.ingreso { color: var(--verde); }
+  .item-monto.gasto { color: var(--rojo); }
+
+  #mensaje-estado {
+    font-size: 0.82rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: none;
+  }
+  #mensaje-estado.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
+  #mensaje-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
+  .vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
 </style>
 </head>
 <body>
 
-<div class="tarjeta">
-  <div id="login-screen">
-    <h1>Centro de Organización Familiar</h1>
-    <p class="subtitulo">Inicia sesión con tu cuenta de Google para continuar</p>
-
-    <div id="g_id_onload"
-         data-client_id="875219439176-7tdu1a1rh0goe8qm8hjits1iumhkd06b.apps.googleusercontent.com" 
-         data-callback="manejarLogin">
-    </div>
-    <div class="g_id_signin" data-type="standard" data-theme="outline" data-size="large"></div>
+<div id="login-screen">
+  <h1>Centro de Organización Familiar</h1>
+  <p>Inicia sesión con tu cuenta de Google para continuar</p>
+  <div id="g_id_onload"
+       data-client_id="875219439176-7tdu1a1rh0goe8qm8hjits1iumhkd06b.apps.googleusercontent.com"
+       data-callback="manejarLogin">
   </div>
+  <div class="g_id_signin" data-type="standard" data-theme="outline" data-size="large"></div>
+</div>
 
-  <div id="app-screen">
-    <p id="bienvenida"></p>
-    <span id="rol"></span>
-    <div id="resultado"></div>
+<div id="app-screen">
+  <header class="app-header">
+    <h2 id="bienvenida">Hola<span class="rol" id="rol"></span></h2>
     <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
+  </header>
+
+  <div id="mensaje-estado"></div>
+
+  <div class="resumen">
+    <div class="tarjeta saldo">
+      <span class="label">Saldo</span>
+      <span class="valor" id="valor-saldo">RD$0</span>
+    </div>
+    <div class="tarjeta ingresos">
+      <span class="label">Ingresos</span>
+      <span class="valor" id="valor-ingresos">RD$0</span>
+    </div>
+    <div class="tarjeta gastos">
+      <span class="label">Gastos</span>
+      <span class="valor" id="valor-gastos">RD$0</span>
+    </div>
   </div>
+
+  <section class="bloque">
+    <h3>Registrar movimiento</h3>
+    <form id="form-transaccion" onsubmit="return agregarTransaccion(event)">
+      <div class="campo-ancho tipo-toggle">
+        <button type="button" id="btn-ingreso" class="activo ingreso" onclick="elegirTipo('ingreso')">Ingreso</button>
+        <button type="button" id="btn-gasto" class="gasto" onclick="elegirTipo('gasto')">Gasto</button>
+      </div>
+      <input type="hidden" id="campo-tipo" value="ingreso">
+
+      <div>
+        <label for="campo-monto">Monto (RD$)</label>
+        <input type="number" id="campo-monto" step="0.01" min="0" required>
+      </div>
+      <div>
+        <label for="campo-categoria">Categoría</label>
+        <select id="campo-categoria" required></select>
+      </div>
+      <div class="campo-ancho">
+        <label for="campo-descripcion">Descripción (opcional)</label>
+        <input type="text" id="campo-descripcion" placeholder="Ej. Compra semanal">
+      </div>
+      <div class="campo-ancho">
+        <label for="campo-comercio">Comercio (opcional)</label>
+        <input type="text" id="campo-comercio" placeholder="Ej. Supermercado Nacional">
+      </div>
+
+      <button type="submit" class="guardar" id="btn-guardar">Guardar</button>
+    </form>
+  </section>
+
+  <section class="bloque">
+    <h3>Movimientos recientes</h3>
+    <ul id="lista-transacciones">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
 </div>
 
 <script>
@@ -115,49 +252,161 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   let tokenActual = null;
+  let categoriasCache = [];
+  let tipoSeleccionado = "ingreso";
 
   function manejarLogin(response) {
     tokenActual = response.credential;
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'block';
-    probarConexion();
+    iniciarApp();
   }
 
   async function llamarAPI(accion, payload) {
     const res = await fetch(API_URL, {
       method: 'POST',
-      // Importante: text/plain evita el preflight CORS que Apps Script no maneja bien
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ accion: accion, token: tokenActual, payload: payload || {} })
     });
     return res.json();
   }
 
-  async function probarConexion() {
-    const resultadoEl = document.getElementById('resultado');
+  function mostrarMensaje(texto, tipo) {
+    const el = document.getElementById('mensaje-estado');
+    el.textContent = texto;
+    el.className = tipo;
+    if (tipo === 'ok') {
+      setTimeout(() => { el.className = ''; el.textContent = ''; }, 3000);
+    }
+  }
+
+  async function iniciarApp() {
     try {
-      const data = await llamarAPI('getUsuarioActual');
-      if (data.ok) {
-        document.getElementById('bienvenida').textContent = 'Hola, ' + data.datos.nombre;
-        document.getElementById('rol').textContent = data.datos.rol;
-        resultadoEl.className = 'ok';
-        resultadoEl.textContent = 'Conexión exitosa. La API respondió correctamente:\n\n' + JSON.stringify(data.datos, null, 2);
+      const datosUsuario = await llamarAPI('getUsuarioActual');
+      if (!datosUsuario.ok) {
+        mostrarMensaje('Error: ' + datosUsuario.error, 'error');
+        return;
+      }
+      document.getElementById('bienvenida').textContent = 'Hola, ' + datosUsuario.datos.nombre;
+      document.getElementById('rol').textContent = datosUsuario.datos.rol;
+
+      await cargarCategorias();
+      await cargarTransacciones();
+    } catch (err) {
+      mostrarMensaje('No se pudo conectar con la API: ' + err.message, 'error');
+    }
+  }
+
+  function elegirTipo(tipo) {
+    tipoSeleccionado = tipo;
+    document.getElementById('campo-tipo').value = tipo;
+    document.getElementById('btn-ingreso').classList.toggle('activo', tipo === 'ingreso');
+    document.getElementById('btn-gasto').classList.toggle('activo', tipo === 'gasto');
+    poblarSelectCategorias();
+  }
+
+  async function cargarCategorias() {
+    const resp = await llamarAPI('getCategorias');
+    if (resp.ok) {
+      categoriasCache = resp.datos;
+      poblarSelectCategorias();
+    }
+  }
+
+  function poblarSelectCategorias() {
+    const select = document.getElementById('campo-categoria');
+    select.innerHTML = '';
+    const filtradas = categoriasCache.filter(c => c['Tipo (ingreso/gasto)'] === tipoSeleccionado);
+    if (filtradas.length === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = 'Sin categorías disponibles';
+      select.appendChild(opt);
+      return;
+    }
+    filtradas.forEach(cat => {
+      const opt = document.createElement('option');
+      opt.value = cat['Nombre'];
+      opt.textContent = cat['Nombre'];
+      select.appendChild(opt);
+    });
+  }
+
+  async function cargarTransacciones() {
+    const lista = document.getElementById('lista-transacciones');
+    const resp = await llamarAPI('getTransacciones');
+    if (!resp.ok) {
+      lista.innerHTML = '<li class="vacio">No se pudieron cargar los movimientos</li>';
+      return;
+    }
+
+    const transacciones = resp.datos.slice().reverse();
+    let totalIngresos = 0, totalGastos = 0;
+
+    lista.innerHTML = '';
+    if (transacciones.length === 0) {
+      lista.innerHTML = '<li class="vacio">Aún no hay movimientos registrados</li>';
+    }
+
+    transacciones.forEach(t => {
+      const tipo = t['Tipo (ingreso/gasto)'];
+      const monto = parseFloat(t['Monto']) || 0;
+      if (tipo === 'ingreso') totalIngresos += monto; else totalGastos += monto;
+
+      const li = document.createElement('li');
+      const fecha = t['Fecha'] ? new Date(t['Fecha']).toLocaleDateString('es-DO') : '';
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${t['Categoria'] || 'Sin categoría'}</div>
+          <div class="detalle">${t['Descripcion'] || t['Comercio'] || ''} ${fecha ? '· ' + fecha : ''}</div>
+        </div>
+        <div class="item-monto ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+      `;
+      lista.appendChild(li);
+    });
+
+    document.getElementById('valor-ingresos').textContent = 'RD$' + totalIngresos.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-gastos').textContent = 'RD$' + totalGastos.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-saldo').textContent = 'RD$' + (totalIngresos - totalGastos).toLocaleString('es-DO', {minimumFractionDigits:2});
+  }
+
+  async function agregarTransaccion(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('btn-guardar');
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+
+    const payload = {
+      tipo: tipoSeleccionado,
+      monto: parseFloat(document.getElementById('campo-monto').value),
+      categoria: document.getElementById('campo-categoria').value,
+      descripcion: document.getElementById('campo-descripcion').value,
+      comercio: document.getElementById('campo-comercio').value,
+      fuente: 'manual'
+    };
+
+    try {
+      const resp = await llamarAPI('addTransaccion', payload);
+      if (resp.ok) {
+        mostrarMensaje('Movimiento guardado correctamente', 'ok');
+        document.getElementById('form-transaccion').reset();
+        elegirTipo('ingreso');
+        await cargarTransacciones();
       } else {
-        resultadoEl.className = 'error';
-        resultadoEl.textContent = 'Error: ' + data.error;
+        mostrarMensaje('Error al guardar: ' + resp.error, 'error');
       }
     } catch (err) {
-      resultadoEl.className = 'error';
-      resultadoEl.textContent = 'No se pudo conectar con la API. Revisa que la URL sea correcta.\n\n' + err.message;
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Guardar';
     }
+    return false;
   }
 
   function cerrarSesion() {
     tokenActual = null;
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('login-screen').style.display = 'block';
-    document.getElementById('resultado').textContent = '';
-    document.getElementById('resultado').className = '';
   }
 </script>
 
