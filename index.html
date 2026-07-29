@@ -80,6 +80,8 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
     margin-bottom: 1.25rem;
   }
   header.app-header h2 { font-size: 1.1rem; margin: 0; }
@@ -92,6 +94,16 @@
     padding: 2px 9px;
     border-radius: 999px;
     margin-left: 8px;
+  }
+  .acciones-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .texto-sync {
+    font-size: 0.72rem;
+    color: var(--texto-secundario);
+    white-space: nowrap;
   }
   button.secundario {
     background: none;
@@ -106,7 +118,7 @@
   /* ---------- Tarjetas resumen ---------- */
   .resumen {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: 0.75rem;
     margin-bottom: 1.5rem;
   }
@@ -132,16 +144,21 @@
   }
   section.bloque h3 { margin: 0 0 1rem; font-size: 0.95rem; color: var(--azul-oscuro); }
 
-  form#form-transaccion { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-  form#form-transaccion .campo-ancho { grid-column: 1 / -1; }
-  form#form-transaccion label {
+  form#form-transaccion,
+  form#form-categoria { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-transaccion .campo-ancho,
+  form#form-categoria .campo-ancho { grid-column: 1 / -1; }
+  form#form-transaccion label,
+  form#form-categoria label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
     margin-bottom: 4px;
   }
   form#form-transaccion input,
-  form#form-transaccion select {
+  form#form-transaccion select,
+  form#form-categoria input,
+  form#form-categoria select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -187,9 +204,10 @@
     border-bottom: 1px solid var(--borde);
   }
   ul#lista-transacciones li:last-child { border-bottom: none; }
-  .item-info .categoria { font-size: 0.9rem; font-weight: 600; }
-  .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); }
-  .item-monto { font-weight: 700; font-size: 0.95rem; }
+  .item-info { min-width: 0; flex: 1; margin-right: 0.5rem; }
+  .item-info .categoria { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
+  .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); word-break: break-word; }
+  .item-monto { font-weight: 700; font-size: 0.95rem; white-space: nowrap; }
   .item-monto.ingreso { color: var(--verde); }
   .item-monto.gasto { color: var(--rojo); }
 
@@ -211,6 +229,32 @@
     font-size: 0.72rem;
     margin-top: 2rem;
     padding-bottom: 1rem;
+  }
+
+  /* ---------- Ajustes para pantallas de celular ---------- */
+  @media (max-width: 480px) {
+    body { padding: 0.75rem; }
+
+    #login-screen { margin-top: 2.5rem; padding: 1.5rem 1.25rem; }
+
+    header.app-header { flex-direction: column; align-items: flex-start; }
+    .acciones-header { width: 100%; justify-content: space-between; }
+
+    .resumen { gap: 0.5rem; }
+    .resumen .tarjeta { padding: 0.65rem 0.7rem; }
+    .resumen .tarjeta span.valor { font-size: 1rem; }
+    .resumen .tarjeta span.label { font-size: 0.66rem; }
+
+    section.bloque { padding: 1rem; }
+    form#form-transaccion,
+    form#form-categoria { grid-template-columns: 1fr; }
+
+    .tipo-toggle { flex-wrap: nowrap; }
+
+    ul#lista-transacciones li,
+    #lista-categorias li {
+      align-items: flex-start;
+    }
   }
 </style>
 </head>
@@ -235,7 +279,10 @@
 <div id="app-screen">
   <header class="app-header">
     <h2>Hola, <span id="nombre-usuario"></span><span class="rol" id="rol"></span></h2>
-    <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
+    <div class="acciones-header">
+      <span id="ultima-sync" class="texto-sync"></span>
+      <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
+    </div>
   </header>
 
   <div id="mensaje-estado"></div>
@@ -291,6 +338,36 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+
+  <section class="bloque">
+    <h3>Categorías</h3>
+    <form id="form-categoria" onsubmit="return guardarCategoria(event)">
+      <div class="campo-ancho tipo-toggle">
+        <button type="button" id="cat-btn-ingreso" class="activo ingreso" onclick="elegirTipoCategoria('ingreso')">Ingreso</button>
+        <button type="button" id="cat-btn-gasto" class="gasto" onclick="elegirTipoCategoria('gasto')">Gasto</button>
+      </div>
+      <input type="hidden" id="cat-campo-tipo" value="ingreso">
+      <input type="hidden" id="cat-campo-id" value="">
+
+      <div>
+        <label for="cat-campo-nombre">Nombre</label>
+        <input type="text" id="cat-campo-nombre" required>
+      </div>
+      <div>
+        <label for="cat-campo-icono">Ícono (opcional)</label>
+        <input type="text" id="cat-campo-icono" maxlength="4" placeholder="🛒">
+      </div>
+
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="cat-btn-guardar" style="flex:1;">Agregar categoría</button>
+        <button type="button" class="secundario" id="cat-btn-cancelar" onclick="cancelarEdicionCategoria()" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+
+    <ul id="lista-categorias" style="margin-top:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
 </div>
 
 <footer id="pie-version"></footer>
@@ -300,8 +377,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "1.1";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 10:40 am";
+  const VERSION_APP = "1.4";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 12:10 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -309,6 +386,7 @@
   let tokenActual = null;
   let categoriasCache = [];
   let tipoSeleccionado = "ingreso";
+  let intervaloSincronizacion = null;
 
   function manejarLogin(response) {
     tokenActual = response.credential;
@@ -339,11 +417,32 @@
       document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
       document.getElementById('rol').textContent = datosUsuario.datos.rol;
 
-      await cargarCategorias();
-      await cargarTransacciones();
+      await sincronizarDatos();
+      if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
+      intervaloSincronizacion = setInterval(sincronizarDatos, 10000); // cada 10 segundos
     } catch (err) {
       mostrarErrorLogin('No se pudo conectar con la API: ' + err.message);
     }
+  }
+
+  // Formatea la hora actual en el huso horario de Santo Domingo (GMT-4, sin horario de verano)
+  function horaSantoDomingo(fecha) {
+    return fecha.toLocaleTimeString('es-DO', {
+      timeZone: 'America/Santo_Domingo',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  function actualizarUltimaSincronizacion() {
+    document.getElementById('ultima-sync').textContent =
+      'Última sincronización: ' + horaSantoDomingo(new Date());
+  }
+
+  async function sincronizarDatos() {
+    await cargarCategorias();
+    await cargarTransacciones();
+    actualizarUltimaSincronizacion();
   }
 
   async function llamarAPI(accion, payload) {
@@ -377,6 +476,7 @@
     if (resp.ok) {
       categoriasCache = resp.datos;
       poblarSelectCategorias();
+      renderizarCategorias();
     }
   }
 
@@ -396,6 +496,115 @@
       opt.textContent = cat['Nombre'];
       select.appendChild(opt);
     });
+  }
+
+  // ---------- Categorías editables ----------
+  let tipoCategoriaSeleccionado = "ingreso";
+  let categoriaEditandoId = null;
+
+  function elegirTipoCategoria(tipo) {
+    tipoCategoriaSeleccionado = tipo;
+    document.getElementById('cat-campo-tipo').value = tipo;
+    document.getElementById('cat-btn-ingreso').classList.toggle('activo', tipo === 'ingreso');
+    document.getElementById('cat-btn-gasto').classList.toggle('activo', tipo === 'gasto');
+  }
+
+  function renderizarCategorias() {
+    const lista = document.getElementById('lista-categorias');
+    lista.innerHTML = '';
+    if (categoriasCache.length === 0) {
+      lista.innerHTML = '<li class="vacio">No hay categorías creadas</li>';
+      return;
+    }
+    categoriasCache.forEach(cat => {
+      const tipo = cat['Tipo (ingreso/gasto)'];
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${cat['Icono'] || ''} ${cat['Nombre']}</div>
+          <div class="detalle">${tipo === 'ingreso' ? 'Ingreso' : 'Gasto'}</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button type="button" class="secundario" onclick="editarCategoria('${cat['ID']}')">Editar</button>
+          <button type="button" class="secundario" onclick="eliminarCategoria('${cat['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  function editarCategoria(id) {
+    const cat = categoriasCache.find(c => String(c['ID']) === String(id));
+    if (!cat) return;
+    categoriaEditandoId = id;
+    document.getElementById('cat-campo-id').value = id;
+    document.getElementById('cat-campo-nombre').value = cat['Nombre'];
+    document.getElementById('cat-campo-icono').value = cat['Icono'] || '';
+    elegirTipoCategoria(cat['Tipo (ingreso/gasto)']);
+    document.getElementById('cat-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('cat-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-categoria').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionCategoria() {
+    categoriaEditandoId = null;
+    document.getElementById('form-categoria').reset();
+    document.getElementById('cat-campo-id').value = '';
+    elegirTipoCategoria('ingreso');
+    document.getElementById('cat-btn-guardar').textContent = 'Agregar categoría';
+    document.getElementById('cat-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarCategoria(id) {
+    if (!confirm('¿Eliminar esta categoría? Las transacciones ya guardadas no se verán afectadas.')) return;
+    try {
+      const resp = await llamarAPI('deleteCategoria', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Categoría eliminada', 'ok');
+        await cargarCategorias();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarCategoria(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('cat-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      nombre: document.getElementById('cat-campo-nombre').value.trim(),
+      tipo: tipoCategoriaSeleccionado,
+      icono: document.getElementById('cat-campo-icono').value.trim()
+    };
+
+    try {
+      let resp;
+      if (categoriaEditandoId) {
+        payload.id = categoriaEditandoId;
+        resp = await llamarAPI('updateCategoria', payload);
+      } else {
+        resp = await llamarAPI('addCategoria', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(categoriaEditandoId ? 'Categoría actualizada' : 'Categoría agregada', 'ok');
+        cancelarEdicionCategoria();
+        await cargarCategorias();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
   }
 
   async function cargarTransacciones() {
@@ -458,6 +667,7 @@
         document.getElementById('form-transaccion').reset();
         elegirTipo('ingreso');
         await cargarTransacciones();
+        actualizarUltimaSincronizacion();
       } else {
         mostrarMensaje('Error al guardar: ' + resp.error, 'error');
       }
@@ -472,6 +682,10 @@
 
   function cerrarSesion() {
     tokenActual = null;
+    if (intervaloSincronizacion) {
+      clearInterval(intervaloSincronizacion);
+      intervaloSincronizacion = null;
+    }
     document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('login-error').style.display = 'none';
