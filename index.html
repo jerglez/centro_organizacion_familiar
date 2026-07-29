@@ -42,6 +42,37 @@
   #login-screen p { color: var(--texto-secundario); font-size: 0.9rem; margin: 0 0 1.5rem; }
   .g_id_signin { display: flex; justify-content: center; }
 
+  #login-error {
+    display: none;
+    background: var(--rojo-fondo);
+    color: var(--rojo);
+    font-size: 0.82rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 1.25rem;
+    text-align: left;
+  }
+
+  /* ---------- Pantalla de carga / verificacion ---------- */
+  #loading-screen {
+    display: none;
+    max-width: 380px;
+    margin: 6rem auto 0;
+    text-align: center;
+    color: var(--texto-secundario);
+    font-size: 0.9rem;
+  }
+  .spinner {
+    width: 34px;
+    height: 34px;
+    margin: 0 auto 1rem;
+    border: 3px solid var(--borde);
+    border-top-color: var(--azul);
+    border-radius: 50%;
+    animation: girar 0.8s linear infinite;
+  }
+  @keyframes girar { to { transform: rotate(360deg); } }
+
   /* ---------- Pantalla principal ---------- */
   #app-screen { display: none; max-width: 720px; margin: 0 auto; }
 
@@ -179,6 +210,7 @@
 <div id="login-screen">
   <h1>Centro de Organización Familiar</h1>
   <p>Inicia sesión con tu cuenta de Google para continuar</p>
+  <div id="login-error"></div>
   <div id="g_id_onload"
        data-client_id="875219439176-7tdu1a1rh0goe8qm8hjits1iumhkd06b.apps.googleusercontent.com"
        data-callback="manejarLogin">
@@ -186,9 +218,14 @@
   <div class="g_id_signin" data-type="standard" data-theme="outline" data-size="large"></div>
 </div>
 
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <p>Verificando acceso...</p>
+</div>
+
 <div id="app-screen">
   <header class="app-header">
-    <h2 id="bienvenida">Hola<span class="rol" id="rol"></span></h2>
+    <h2>Hola, <span id="nombre-usuario"></span><span class="rol" id="rol"></span></h2>
     <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
   </header>
 
@@ -257,9 +294,38 @@
 
   function manejarLogin(response) {
     tokenActual = response.credential;
+    document.getElementById('login-error').style.display = 'none';
     document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('app-screen').style.display = 'block';
-    iniciarApp();
+    document.getElementById('loading-screen').style.display = 'block';
+    verificarAcceso();
+  }
+
+  function mostrarErrorLogin(texto) {
+    tokenActual = null;
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'block';
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = texto;
+    errEl.style.display = 'block';
+  }
+
+  async function verificarAcceso() {
+    try {
+      const datosUsuario = await llamarAPI('getUsuarioActual');
+      if (!datosUsuario.ok) {
+        mostrarErrorLogin(datosUsuario.error || 'No tienes acceso autorizado. Intenta con otra cuenta.');
+        return;
+      }
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('app-screen').style.display = 'block';
+      document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
+      document.getElementById('rol').textContent = datosUsuario.datos.rol;
+
+      await cargarCategorias();
+      await cargarTransacciones();
+    } catch (err) {
+      mostrarErrorLogin('No se pudo conectar con la API: ' + err.message);
+    }
   }
 
   async function llamarAPI(accion, payload) {
@@ -277,23 +343,6 @@
     el.className = tipo;
     if (tipo === 'ok') {
       setTimeout(() => { el.className = ''; el.textContent = ''; }, 3000);
-    }
-  }
-
-  async function iniciarApp() {
-    try {
-      const datosUsuario = await llamarAPI('getUsuarioActual');
-      if (!datosUsuario.ok) {
-        mostrarMensaje('Error: ' + datosUsuario.error, 'error');
-        return;
-      }
-      document.getElementById('bienvenida').textContent = 'Hola, ' + datosUsuario.datos.nombre;
-      document.getElementById('rol').textContent = datosUsuario.datos.rol;
-
-      await cargarCategorias();
-      await cargarTransacciones();
-    } catch (err) {
-      mostrarMensaje('No se pudo conectar con la API: ' + err.message, 'error');
     }
   }
 
@@ -405,7 +454,9 @@
 
   function cerrarSesion() {
     tokenActual = null;
+    document.getElementById('loading-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'none';
+    document.getElementById('login-error').style.display = 'none';
     document.getElementById('login-screen').style.display = 'block';
   }
 </script>
