@@ -171,11 +171,17 @@
   section.bloque h3 { margin: 0 0 1rem; font-size: 0.95rem; color: var(--azul-oscuro); }
 
   form#form-transaccion,
-  form#form-categoria { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-categoria,
+  form#form-cuenta,
+  form#form-transferencia { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
-  form#form-categoria .campo-ancho { grid-column: 1 / -1; }
+  form#form-categoria .campo-ancho,
+  form#form-cuenta .campo-ancho,
+  form#form-transferencia .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
-  form#form-categoria label {
+  form#form-categoria label,
+  form#form-cuenta label,
+  form#form-transferencia label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -184,7 +190,11 @@
   form#form-transaccion input,
   form#form-transaccion select,
   form#form-categoria input,
-  form#form-categoria select {
+  form#form-categoria select,
+  form#form-cuenta input,
+  form#form-cuenta select,
+  form#form-transferencia input,
+  form#form-transferencia select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -281,7 +291,9 @@
 
     section.bloque { padding: 1rem; }
     form#form-transaccion,
-    form#form-categoria { grid-template-columns: 1fr; }
+    form#form-categoria,
+    form#form-cuenta,
+    form#form-transferencia { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -353,6 +365,10 @@
         <label for="campo-categoria">Categoría</label>
         <select id="campo-categoria" required></select>
       </div>
+      <div>
+        <label for="campo-cuenta">Cuenta</label>
+        <select id="campo-cuenta" required></select>
+      </div>
       <div class="campo-ancho">
         <label for="campo-descripcion">Descripción (opcional)</label>
         <input type="text" id="campo-descripcion" placeholder="Ej. Compra semanal">
@@ -402,6 +418,71 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+
+  <section class="bloque">
+    <h3>Cuentas</h3>
+    <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
+      <input type="hidden" id="cuenta-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="cuenta-campo-nombre">Nombre</label>
+        <input type="text" id="cuenta-campo-nombre" placeholder="Ej. Banreservas Ahorros" required>
+      </div>
+      <div>
+        <label for="cuenta-campo-tipo">Tipo</label>
+        <select id="cuenta-campo-tipo" required>
+          <option value="Ahorro">Ahorro</option>
+          <option value="Debito">Débito</option>
+          <option value="Tarjeta de credito">Tarjeta de crédito</option>
+          <option value="Prestamo">Préstamo</option>
+          <option value="Inversion">Inversión</option>
+          <option value="Efectivo">Efectivo</option>
+        </select>
+      </div>
+      <div>
+        <label for="cuenta-campo-institucion">Institución (opcional)</label>
+        <input type="text" id="cuenta-campo-institucion" placeholder="Ej. Banreservas">
+      </div>
+      <div class="campo-ancho">
+        <label for="cuenta-campo-saldo">Saldo inicial (RD$)</label>
+        <input type="number" id="cuenta-campo-saldo" step="0.01" value="0">
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="cuenta-btn-guardar" style="flex:1;">Agregar cuenta</button>
+        <button type="button" class="secundario" id="cuenta-btn-cancelar" onclick="cancelarEdicionCuenta()" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+
+    <ul id="lista-cuentas" style="margin-top:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
+
+  <section class="bloque">
+    <h3>Transferencias entre cuentas</h3>
+    <form id="form-transferencia" onsubmit="return agregarTransferencia(event)">
+      <div>
+        <label for="transf-origen">Desde</label>
+        <select id="transf-origen" required></select>
+      </div>
+      <div>
+        <label for="transf-destino">Hacia</label>
+        <select id="transf-destino" required></select>
+      </div>
+      <div class="campo-ancho">
+        <label for="transf-monto">Monto (RD$)</label>
+        <input type="number" id="transf-monto" step="0.01" min="0" required>
+      </div>
+      <div class="campo-ancho">
+        <label for="transf-descripcion">Descripción (opcional)</label>
+        <input type="text" id="transf-descripcion" placeholder="Ej. Retiro de cajero">
+      </div>
+      <button type="submit" class="guardar" id="transf-btn-guardar">Transferir</button>
+    </form>
+
+    <ul id="lista-transferencias" style="margin-top:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
 </div>
 
 <footer id="pie-version"></footer>
@@ -411,14 +492,17 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "2.1";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 3:40 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "3.0";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 4:50 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
 
   let tokenActual = null;
   let categoriasCache = [];
+  let cuentasCache = [];
+  let transaccionesCache = [];
+  let transferenciasCache = [];
   let tipoSeleccionado = "ingreso";
   let intervaloSincronizacion = null;
 
@@ -477,13 +561,18 @@
     // No interrumpir si el usuario esta escribiendo/seleccionando algo en los formularios
     const elementoActivo = document.activeElement;
     const escribiendoEnFormulario = elementoActivo && (
-      elementoActivo.closest('#form-transaccion') || elementoActivo.closest('#form-categoria')
+      elementoActivo.closest('#form-transaccion') ||
+      elementoActivo.closest('#form-categoria') ||
+      elementoActivo.closest('#form-cuenta') ||
+      elementoActivo.closest('#form-transferencia')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
     if (escribiendoEnFormulario) return;
 
+    await cargarCuentas();
     await cargarCategorias();
     await cargarTransacciones();
+    await cargarTransferencias();
     actualizarUltimaSincronizacion();
   }
 
@@ -655,6 +744,241 @@
     return false;
   }
 
+  // ---------- Cuentas ----------
+  let cuentaEditandoId = null;
+
+  async function cargarCuentas() {
+    const resp = await llamarAPI('getCuentas');
+    if (resp.ok) {
+      cuentasCache = resp.datos;
+      poblarSelectsCuentas();
+      renderizarCuentas();
+    }
+  }
+
+  function poblarSelectsCuentas() {
+    const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
+    const selects = [
+      document.getElementById('campo-cuenta'),
+      document.getElementById('transf-origen'),
+      document.getElementById('transf-destino')
+    ];
+
+    selects.forEach(select => {
+      const valorPrevio = select.value;
+      select.innerHTML = '';
+      if (activas.length === 0) {
+        const opt = document.createElement('option');
+        opt.textContent = 'Crea una cuenta primero';
+        select.appendChild(opt);
+        return;
+      }
+      activas.forEach(cuenta => {
+        const opt = document.createElement('option');
+        opt.value = cuenta['Nombre'];
+        opt.textContent = cuenta['Nombre'] + ' (' + cuenta['Tipo'] + ')';
+        select.appendChild(opt);
+      });
+      if (valorPrevio && activas.some(c => c['Nombre'] === valorPrevio)) {
+        select.value = valorPrevio;
+      }
+    });
+  }
+
+  function renderizarCuentas() {
+    const lista = document.getElementById('lista-cuentas');
+    lista.innerHTML = '';
+    if (cuentasCache.length === 0) {
+      lista.innerHTML = '<li class="vacio">Aún no has creado ninguna cuenta</li>';
+      return;
+    }
+    cuentasCache.forEach(cuenta => {
+      const saldo = calcularSaldoCuenta(cuenta['Nombre']);
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${cuenta['Nombre']}</div>
+          <div class="detalle">${cuenta['Tipo']}${cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : ''}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="item-monto cifra">RD$${saldo.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
+          <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
+  function calcularSaldoCuenta(nombreCuenta) {
+    const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    let saldo = cuenta ? (parseFloat(cuenta['Saldo inicial']) || 0) : 0;
+
+    transaccionesCache.forEach(t => {
+      if (t['Cuenta'] === nombreCuenta) {
+        const monto = parseFloat(t['Monto']) || 0;
+        if (t['Tipo (ingreso/gasto)'] === 'ingreso') saldo += monto; else saldo -= monto;
+      }
+    });
+
+    transferenciasCache.forEach(tr => {
+      const monto = parseFloat(tr['Monto']) || 0;
+      if (tr['Cuenta origen'] === nombreCuenta) saldo -= monto;
+      if (tr['Cuenta destino'] === nombreCuenta) saldo += monto;
+    });
+
+    return saldo;
+  }
+
+  function editarCuenta(id) {
+    const cuenta = cuentasCache.find(c => String(c['ID']) === String(id));
+    if (!cuenta) return;
+    cuentaEditandoId = id;
+    document.getElementById('cuenta-campo-id').value = id;
+    document.getElementById('cuenta-campo-nombre').value = cuenta['Nombre'];
+    document.getElementById('cuenta-campo-tipo').value = cuenta['Tipo'];
+    document.getElementById('cuenta-campo-institucion').value = cuenta['Institucion'] || '';
+    document.getElementById('cuenta-campo-saldo').value = cuenta['Saldo inicial'] || 0;
+    document.getElementById('cuenta-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('cuenta-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-cuenta').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionCuenta() {
+    cuentaEditandoId = null;
+    document.getElementById('form-cuenta').reset();
+    document.getElementById('cuenta-campo-id').value = '';
+    document.getElementById('cuenta-btn-guardar').textContent = 'Agregar cuenta';
+    document.getElementById('cuenta-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarCuenta(id) {
+    if (!confirm('¿Eliminar esta cuenta? Las transacciones ya guardadas con esta cuenta no se veran afectadas.')) return;
+    try {
+      const resp = await llamarAPI('deleteCuenta', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Cuenta eliminada', 'ok');
+        await cargarCuentas();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarCuenta(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('cuenta-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      nombre: document.getElementById('cuenta-campo-nombre').value.trim(),
+      tipo: document.getElementById('cuenta-campo-tipo').value,
+      institucion: document.getElementById('cuenta-campo-institucion').value.trim(),
+      saldoInicial: parseFloat(document.getElementById('cuenta-campo-saldo').value) || 0
+    };
+
+    try {
+      let resp;
+      if (cuentaEditandoId) {
+        payload.id = cuentaEditandoId;
+        resp = await llamarAPI('updateCuenta', payload);
+      } else {
+        resp = await llamarAPI('addCuenta', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(cuentaEditandoId ? 'Cuenta actualizada' : 'Cuenta agregada', 'ok');
+        cancelarEdicionCuenta();
+        await cargarCuentas();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
+  }
+
+  // ---------- Transferencias ----------
+  async function cargarTransferencias() {
+    const resp = await llamarAPI('getTransferencias');
+    const lista = document.getElementById('lista-transferencias');
+    if (!resp.ok) {
+      lista.innerHTML = '<li class="vacio">No se pudieron cargar las transferencias</li>';
+      return;
+    }
+    transferenciasCache = resp.datos || [];
+    const transferencias = transferenciasCache.slice().reverse();
+
+    lista.innerHTML = '';
+    if (transferencias.length === 0) {
+      lista.innerHTML = '<li class="vacio">Aún no hay transferencias registradas</li>';
+    }
+    transferencias.forEach(tr => {
+      const monto = parseFloat(tr['Monto']) || 0;
+      const fecha = tr['Fecha'] ? new Date(tr['Fecha']).toLocaleDateString('es-DO') : '';
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${tr['Cuenta origen']} → ${tr['Cuenta destino']}</div>
+          <div class="detalle">${tr['Descripcion'] || ''} ${fecha ? '· ' + fecha : ''}</div>
+        </div>
+        <div class="item-monto cifra">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+      `;
+      lista.appendChild(li);
+    });
+
+    // Recalcula los saldos de cuentas, ya que una transferencia los afecta
+    renderizarCuentas();
+  }
+
+  async function agregarTransferencia(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('transf-btn-guardar');
+    const origen = document.getElementById('transf-origen').value;
+    const destino = document.getElementById('transf-destino').value;
+
+    if (origen === destino) {
+      mostrarMensaje('La cuenta de origen y destino no pueden ser la misma', 'error');
+      return false;
+    }
+
+    boton.disabled = true;
+    boton.textContent = 'Transfiriendo...';
+
+    const payload = {
+      cuentaOrigen: origen,
+      cuentaDestino: destino,
+      monto: parseFloat(document.getElementById('transf-monto').value),
+      descripcion: document.getElementById('transf-descripcion').value
+    };
+
+    try {
+      const resp = await llamarAPI('addTransferencia', payload);
+      if (resp.ok) {
+        mostrarMensaje('Transferencia registrada', 'ok');
+        document.getElementById('form-transferencia').reset();
+        await cargarTransferencias();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al transferir: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo transferir: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Transferir';
+    }
+    return false;
+  }
+
   async function cargarTransacciones() {
     const lista = document.getElementById('lista-transacciones');
     const resp = await llamarAPI('getTransacciones');
@@ -663,7 +987,8 @@
       return;
     }
 
-    const transacciones = (resp.datos || []).slice().reverse();
+    transaccionesCache = resp.datos || [];
+    const transacciones = transaccionesCache.slice().reverse();
 
     // El Saldo es acumulado de todo el historico (el dinero no se resetea cada mes)
     let saldoTotal = 0;
@@ -712,6 +1037,8 @@
     document.getElementById('valor-ingresos').textContent = 'RD$' + ingresosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-gastos').textContent = 'RD$' + gastosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-saldo').textContent = 'RD$' + saldoTotal.toLocaleString('es-DO', {minimumFractionDigits:2});
+
+    renderizarCuentas(); // el saldo por cuenta depende de las transacciones recien cargadas
   }
 
   async function agregarTransaccion(evento) {
@@ -724,6 +1051,7 @@
       tipo: tipoSeleccionado,
       monto: parseFloat(document.getElementById('campo-monto').value),
       categoria: document.getElementById('campo-categoria').value,
+      cuenta: document.getElementById('campo-cuenta').value,
       descripcion: document.getElementById('campo-descripcion').value,
       comercio: document.getElementById('campo-comercio').value,
       fuente: 'manual'
