@@ -5,40 +5,56 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Centro de Organización Familiar</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --azul: #185FA5;
-    --azul-oscuro: #0F3D6B;
-    --verde: #1E7A46;
-    --verde-fondo: #EEF8F1;
-    --rojo: #B3261E;
-    --rojo-fondo: #FCEEEC;
-    --fondo: #F5F7FA;
-    --texto: #1B2430;
-    --texto-secundario: #5F6B7A;
-    --borde: #DDE3EA;
+    --teal: #0E5C56;
+    --teal-oscuro: #093F3B;
+    --teal-claro: #E4EFEE;
+    --verde: #2E9F6E;
+    --verde-fondo: #E9F6EF;
+    --coral: #C85A46;
+    --coral-fondo: #FBEBE7;
+    --mango: #D99A3E;
+    --fondo: #F6F9F8;
+    --superficie: #FFFFFF;
+    --texto: #1C2521;
+    --texto-secundario: #5C6864;
+    --borde: #DCE5E2;
+
+    /* alias de compatibilidad con nombres usados antes en el archivo */
+    --azul: var(--teal);
+    --azul-oscuro: var(--teal-oscuro);
+    --rojo: var(--coral);
+    --rojo-fondo: var(--coral-fondo);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--fondo);
     color: var(--texto);
     min-height: 100vh;
     padding: 1.25rem;
+  }
+  .cifra {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
   }
 
   /* ---------- Pantalla de login ---------- */
   #login-screen {
     max-width: 380px;
     margin: 4rem auto 0;
-    background: #fff;
+    background: var(--superficie);
     border-radius: 16px;
     border: 1px solid var(--borde);
     padding: 2rem 1.75rem;
     text-align: center;
   }
-  #login-screen h1 { font-size: 1.3rem; margin: 0 0 0.4rem; color: var(--azul-oscuro); }
+  #login-screen h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 1.5rem; margin: 0 0 0.4rem; color: var(--teal-oscuro); }
   #login-screen p { color: var(--texto-secundario); font-size: 0.9rem; margin: 0 0 1.5rem; }
   .g_id_signin { display: flex; justify-content: center; }
 
@@ -84,11 +100,11 @@
     gap: 0.6rem;
     margin-bottom: 1.25rem;
   }
-  header.app-header h2 { font-size: 1.1rem; margin: 0; }
+  header.app-header h2 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 1.2rem; margin: 0; }
   header.app-header .rol {
     display: inline-block;
-    background: #E6F1FB;
-    color: var(--azul);
+    background: var(--teal-claro);
+    color: var(--teal);
     font-size: 0.72rem;
     font-weight: 600;
     padding: 2px 9px;
@@ -123,20 +139,30 @@
     margin-bottom: 1.5rem;
   }
   .resumen .tarjeta {
-    background: #fff;
+    background: var(--superficie);
     border: 1px solid var(--borde);
     border-radius: 12px;
     padding: 0.9rem 1rem;
   }
   .resumen .tarjeta span.label { font-size: 0.72rem; color: var(--texto-secundario); display: block; margin-bottom: 4px; }
-  .resumen .tarjeta span.valor { font-size: 1.15rem; font-weight: 700; }
-  .resumen .tarjeta.saldo span.valor { color: var(--azul-oscuro); }
+  .resumen .tarjeta span.valor {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .resumen .tarjeta.saldo span.valor {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 1.5rem;
+    color: var(--teal-oscuro);
+  }
   .resumen .tarjeta.ingresos span.valor { color: var(--verde); }
   .resumen .tarjeta.gastos span.valor { color: var(--rojo); }
 
   /* ---------- Formulario ---------- */
   section.bloque {
-    background: #fff;
+    background: var(--superficie);
     border: 1px solid var(--borde);
     border-radius: 14px;
     padding: 1.25rem;
@@ -172,7 +198,7 @@
     padding: 0.55rem;
     border-radius: 8px;
     border: 1px solid var(--borde);
-    background: #fff;
+    background: var(--superficie);
     font-size: 0.85rem;
     cursor: pointer;
     color: var(--texto-secundario);
@@ -195,15 +221,23 @@
   button.guardar:disabled { opacity: 0.6; cursor: not-allowed; }
 
   /* ---------- Lista de transacciones ---------- */
-  ul#lista-transacciones { list-style: none; margin: 0; padding: 0; }
-  ul#lista-transacciones li {
+  ul#lista-transacciones,
+  #lista-categorias { list-style: none; margin: 0; padding: 0; }
+  ul#lista-transacciones li,
+  #lista-categorias li {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.65rem 0;
+    padding: 0.65rem 0 0.65rem 0.7rem;
     border-bottom: 1px solid var(--borde);
+    border-left: 3px solid transparent;
   }
-  ul#lista-transacciones li:last-child { border-bottom: none; }
+  ul#lista-transacciones li.ingreso,
+  #lista-categorias li.ingreso { border-left-color: var(--verde); }
+  ul#lista-transacciones li.gasto,
+  #lista-categorias li.gasto { border-left-color: var(--coral); }
+  ul#lista-transacciones li:last-child,
+  #lista-categorias li:last-child { border-bottom: none; }
   .item-info { min-width: 0; flex: 1; margin-right: 0.5rem; }
   .item-info .categoria { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
   .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); word-break: break-word; }
@@ -289,15 +323,15 @@
 
   <div class="resumen">
     <div class="tarjeta saldo">
-      <span class="label">Saldo</span>
+      <span class="label">Saldo total</span>
       <span class="valor" id="valor-saldo">RD$0</span>
     </div>
     <div class="tarjeta ingresos">
-      <span class="label">Ingresos</span>
+      <span class="label">Ingresos · este mes</span>
       <span class="valor" id="valor-ingresos">RD$0</span>
     </div>
     <div class="tarjeta gastos">
-      <span class="label">Gastos</span>
+      <span class="label">Gastos · este mes</span>
       <span class="valor" id="valor-gastos">RD$0</span>
     </div>
   </div>
@@ -377,8 +411,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "1.6";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 1:05 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "2.0";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 3:15 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -532,6 +566,7 @@
     categoriasCache.forEach(cat => {
       const tipo = cat['Tipo (ingreso/gasto)'];
       const li = document.createElement('li');
+      li.className = tipo;
       li.innerHTML = `
         <div class="item-info">
           <div class="categoria">${cat['Icono'] || ''} ${cat['Nombre']}</div>
@@ -629,7 +664,15 @@
     }
 
     const transacciones = (resp.datos || []).slice().reverse();
-    let totalIngresos = 0, totalGastos = 0;
+
+    // El Saldo es acumulado de todo el historico (el dinero no se resetea cada mes)
+    let saldoTotal = 0;
+    // Ingresos/Gastos del Dashboard cierran por mes actual, para reflejar el mes en curso
+    let ingresosMes = 0, gastosMes = 0;
+
+    const ahora = new Date();
+    const mesActual = ahora.getMonth();
+    const anioActual = ahora.getFullYear();
 
     lista.innerHTML = '';
     if (transacciones.length === 0) {
@@ -639,23 +682,36 @@
     transacciones.forEach(t => {
       const tipo = t['Tipo (ingreso/gasto)'];
       const monto = parseFloat(t['Monto']) || 0;
-      if (tipo === 'ingreso') totalIngresos += monto; else totalGastos += monto;
+      const fechaTransaccion = t['Fecha'] ? new Date(t['Fecha']) : null;
+
+      // Saldo: siempre acumulado, sin importar la fecha
+      if (tipo === 'ingreso') saldoTotal += monto; else saldoTotal -= monto;
+
+      // Ingresos/Gastos del Dashboard: solo si la transaccion es del mes y anio actual
+      const esDelMesActual = fechaTransaccion &&
+        fechaTransaccion.getMonth() === mesActual &&
+        fechaTransaccion.getFullYear() === anioActual;
+
+      if (esDelMesActual) {
+        if (tipo === 'ingreso') ingresosMes += monto; else gastosMes += monto;
+      }
 
       const li = document.createElement('li');
-      const fecha = t['Fecha'] ? new Date(t['Fecha']).toLocaleDateString('es-DO') : '';
+      li.className = tipo;
+      const fecha = fechaTransaccion ? fechaTransaccion.toLocaleDateString('es-DO') : '';
       li.innerHTML = `
         <div class="item-info">
           <div class="categoria">${t['Categoria'] || 'Sin categoría'}</div>
           <div class="detalle">${t['Descripcion'] || t['Comercio'] || ''} ${fecha ? '· ' + fecha : ''}</div>
         </div>
-        <div class="item-monto ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+        <div class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
       `;
       lista.appendChild(li);
     });
 
-    document.getElementById('valor-ingresos').textContent = 'RD$' + totalIngresos.toLocaleString('es-DO', {minimumFractionDigits:2});
-    document.getElementById('valor-gastos').textContent = 'RD$' + totalGastos.toLocaleString('es-DO', {minimumFractionDigits:2});
-    document.getElementById('valor-saldo').textContent = 'RD$' + (totalIngresos - totalGastos).toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-ingresos').textContent = 'RD$' + ingresosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-gastos').textContent = 'RD$' + gastosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-saldo').textContent = 'RD$' + saldoTotal.toLocaleString('es-DO', {minimumFractionDigits:2});
   }
 
   async function agregarTransaccion(evento) {
