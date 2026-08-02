@@ -319,9 +319,11 @@
 
   /* ---------- Lista de transacciones ---------- */
   ul#lista-transacciones,
-  #lista-categorias { list-style: none; margin: 0; padding: 0; }
+  #lista-categorias,
+  #lista-ultimos-movimientos { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
-  #lista-categorias li {
+  #lista-categorias li,
+  #lista-ultimos-movimientos li {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -330,11 +332,14 @@
     border-left: 3px solid transparent;
   }
   ul#lista-transacciones li.ingreso,
-  #lista-categorias li.ingreso { border-left-color: var(--verde); }
+  #lista-categorias li.ingreso,
+  #lista-ultimos-movimientos li.ingreso { border-left-color: var(--verde); }
   ul#lista-transacciones li.gasto,
-  #lista-categorias li.gasto { border-left-color: var(--coral); }
+  #lista-categorias li.gasto,
+  #lista-ultimos-movimientos li.gasto { border-left-color: var(--coral); }
   ul#lista-transacciones li:last-child,
-  #lista-categorias li:last-child { border-bottom: none; }
+  #lista-categorias li:last-child,
+  #lista-ultimos-movimientos li:last-child { border-bottom: none; }
   .item-info { min-width: 0; flex: 1; margin-right: 0.5rem; }
   .item-info .categoria { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
   .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); word-break: break-word; }
@@ -352,6 +357,32 @@
   #mensaje-estado.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
   #mensaje-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
   .vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
+
+  /* ---------- Barras de grafica de gastos y presupuesto ---------- */
+  .barra-categoria { margin-bottom: 0.85rem; }
+  .barra-categoria:last-child { margin-bottom: 0; }
+  .barra-categoria .fila-etiqueta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-bottom: 4px;
+    color: var(--texto);
+  }
+  .barra-categoria .pista {
+    background: var(--fondo);
+    border-radius: 6px;
+    height: 10px;
+    overflow: hidden;
+  }
+  .barra-categoria .relleno {
+    height: 100%;
+    border-radius: 6px;
+    background: var(--coral);
+    transition: width 0.3s ease;
+  }
+  .barra-categoria .relleno.ok { background: var(--verde); }
+  .barra-categoria .relleno.warn { background: var(--mango); }
+  .barra-categoria .relleno.exceso { background: var(--coral); }
 
   /* ---------- Pie de version ---------- */
   footer#pie-version {
@@ -493,6 +524,27 @@
       <span class="valor" id="valor-gastos">RD$0</span>
     </div>
   </div>
+
+  <section class="bloque">
+    <h3>Gastos por categoría · este mes</h3>
+    <div id="chart-gastos-categoria"><p class="vacio">Cargando...</p></div>
+  </section>
+
+  <section class="bloque">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h3 style="margin:0;">Presupuesto por categoría</h3>
+      <button type="button" class="secundario" onclick="agregarPresupuestoRapido()">+ Nuevo</button>
+    </div>
+    <div id="lista-presupuestos-dashboard"><p class="vacio">Cargando...</p></div>
+  </section>
+
+  <section class="bloque">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h3 style="margin:0;">Últimos 5 movimientos</h3>
+      <button type="button" class="secundario" onclick="mostrarSeccion('finanzas')">Ver todos</button>
+    </div>
+    <ul id="lista-ultimos-movimientos"><li class="vacio">Cargando...</li></ul>
+  </section>
   </div>
 
   <div class="panel" id="panel-finanzas">
@@ -688,8 +740,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "4.0";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 7:20 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "4.1";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 8:15 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -771,6 +823,7 @@
     await cargarTransacciones();
     await cargarTransferencias();
     await cargarPrestamos();
+    await cargarPresupuestos();
     actualizarUltimaSincronizacion();
   }
 
@@ -1423,6 +1476,161 @@
     document.getElementById('valor-saldo').textContent = 'RD$' + saldoTotal.toLocaleString('es-DO', {minimumFractionDigits:2});
 
     renderizarCuentas(); // el saldo por cuenta depende de las transacciones recien cargadas
+    renderizarGraficaGastos();
+    renderizarPresupuestosDashboard();
+    renderizarUltimosMovimientos();
+  }
+
+  // ---------- Dashboard: grafica de gastos por categoria ----------
+  function calcularGastosPorCategoria() {
+    const ahora = new Date();
+    const mes = ahora.getMonth(), anio = ahora.getFullYear();
+    const totales = {};
+    transaccionesCache.forEach(t => {
+      if (t['Tipo (ingreso/gasto)'] !== 'gasto') return;
+      const fecha = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!fecha || fecha.getMonth() !== mes || fecha.getFullYear() !== anio) return;
+      const cat = t['Categoria'] || 'Sin categoría';
+      const monto = parseFloat(t['Monto']) || 0;
+      totales[cat] = (totales[cat] || 0) + monto;
+    });
+    return totales;
+  }
+
+  function renderizarGraficaGastos() {
+    const cont = document.getElementById('chart-gastos-categoria');
+    const totales = calcularGastosPorCategoria();
+    const entradas = Object.entries(totales).sort((a, b) => b[1] - a[1]);
+    cont.innerHTML = '';
+    if (entradas.length === 0) {
+      cont.innerHTML = '<p class="vacio">Sin gastos registrados este mes</p>';
+      return;
+    }
+    const max = entradas[0][1];
+    entradas.forEach(([cat, monto]) => {
+      const pct = max > 0 ? (monto / max * 100) : 0;
+      const fila = document.createElement('div');
+      fila.className = 'barra-categoria';
+      fila.innerHTML = `
+        <div class="fila-etiqueta">
+          <span>${cat}</span>
+          <span class="cifra">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div class="pista"><div class="relleno" style="width:${pct}%"></div></div>
+      `;
+      cont.appendChild(fila);
+    });
+  }
+
+  // ---------- Dashboard: presupuesto por categoria ----------
+  let presupuestosCache = [];
+
+  async function cargarPresupuestos() {
+    const resp = await llamarAPI('getPresupuestos');
+    if (resp.ok) {
+      presupuestosCache = resp.datos;
+      renderizarPresupuestosDashboard();
+    }
+  }
+
+  function renderizarPresupuestosDashboard() {
+    const cont = document.getElementById('lista-presupuestos-dashboard');
+    const ahora = new Date();
+    const mesActual = ahora.getMonth() + 1; // guardamos el mes como 1-12
+    const anioActual = ahora.getFullYear();
+    const gastos = calcularGastosPorCategoria();
+
+    const delMes = presupuestosCache.filter(p =>
+      parseInt(p['Mes']) === mesActual && parseInt(p['Anio']) === anioActual
+    );
+
+    cont.innerHTML = '';
+    if (delMes.length === 0) {
+      cont.innerHTML = '<p class="vacio">Aún no has definido presupuestos para este mes. Usa "+ Nuevo" para agregar uno.</p>';
+      return;
+    }
+
+    delMes.forEach(p => {
+      const limite = parseFloat(p['Monto limite']) || 0;
+      const gastado = gastos[p['Categoria']] || 0;
+      const pct = limite > 0 ? Math.min(100, (gastado / limite * 100)) : 0;
+      let clase = 'ok';
+      if (pct >= 100) clase = 'exceso';
+      else if (pct >= 70) clase = 'warn';
+
+      const fila = document.createElement('div');
+      fila.className = 'barra-categoria';
+      fila.innerHTML = `
+        <div class="fila-etiqueta">
+          <span>${p['Categoria']}</span>
+          <span class="cifra">RD$${gastado.toLocaleString('es-DO', {minimumFractionDigits:2})} / RD$${limite.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div class="pista"><div class="relleno ${clase}" style="width:${pct}%"></div></div>
+      `;
+      cont.appendChild(fila);
+    });
+  }
+
+  async function agregarPresupuestoRapido() {
+    const categoria = prompt('¿Para cuál categoría de gasto quieres definir un límite?\nEscribe el nombre exacto de la categoría:');
+    if (!categoria) return;
+    const existe = categoriasCache.some(c => c['Nombre'] === categoria && c['Tipo (ingreso/gasto)'] === 'gasto');
+    if (!existe) {
+      mostrarMensaje('Esa categoría de gasto no existe. Revisa el nombre exacto (Categorías → lista).', 'error');
+      return;
+    }
+    const montoStr = prompt('¿Cuál es el límite mensual para "' + categoria + '"? (RD$)');
+    if (!montoStr) return;
+    const monto = parseFloat(montoStr);
+    if (isNaN(monto) || monto <= 0) {
+      mostrarMensaje('El monto no es válido', 'error');
+      return;
+    }
+
+    const ahora = new Date();
+    try {
+      const resp = await llamarAPI('addPresupuesto', {
+        categoria: categoria,
+        montoLimite: monto,
+        mes: ahora.getMonth() + 1,
+        anio: ahora.getFullYear()
+      });
+      if (resp.ok) {
+        mostrarMensaje('Presupuesto agregado', 'ok');
+        await cargarPresupuestos();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo agregar: ' + err.message, 'error');
+    }
+  }
+
+  // ---------- Dashboard: ultimos 5 movimientos ----------
+  function renderizarUltimosMovimientos() {
+    const cont = document.getElementById('lista-ultimos-movimientos');
+    const ultimos = transaccionesCache.slice().reverse().slice(0, 5);
+    cont.innerHTML = '';
+    if (ultimos.length === 0) {
+      cont.innerHTML = '<li class="vacio">Aún no hay movimientos</li>';
+      return;
+    }
+    ultimos.forEach(t => {
+      const tipo = t['Tipo (ingreso/gasto)'];
+      const monto = parseFloat(t['Monto']) || 0;
+      const fecha = t['Fecha'] ? new Date(t['Fecha']).toLocaleDateString('es-DO') : '';
+      const li = document.createElement('li');
+      li.className = tipo;
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${t['Categoria'] || 'Sin categoría'}</div>
+          <div class="detalle">${t['Descripcion'] || t['Comercio'] || ''} ${fecha ? '· ' + fecha : ''}</div>
+        </div>
+        <div class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+      `;
+      cont.appendChild(li);
+    });
   }
 
   async function agregarTransaccion(evento) {
