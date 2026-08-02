@@ -230,14 +230,17 @@
   .resumen .tarjeta span.valor {
     font-family: 'IBM Plex Mono', ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 1.05rem;
+    font-size: clamp(0.72rem, 4.2vw, 1.05rem);
     font-weight: 600;
+    overflow-wrap: anywhere;
+    line-height: 1.2;
   }
   .resumen .tarjeta.saldo span.valor {
     font-family: 'Fraunces', serif;
     font-weight: 600;
-    font-size: 1.5rem;
+    font-size: clamp(0.95rem, 5.5vw, 1.5rem);
     color: var(--teal-oscuro);
+    overflow-wrap: anywhere;
   }
   .resumen .tarjeta.ingresos span.valor { color: var(--verde); }
   .resumen .tarjeta.gastos span.valor { color: var(--rojo); }
@@ -381,8 +384,19 @@
     transition: width 0.3s ease;
   }
   .barra-categoria .relleno.ok { background: var(--verde); }
-  .barra-categoria .relleno.warn { background: var(--mango); }
+  .barra-categoria .relleno.prealerta { background: var(--mango); }
+  .barra-categoria .relleno.alerta { background: #C8763E; }
   .barra-categoria .relleno.exceso { background: var(--coral); }
+  .badge-alerta {
+    font-size: 0.66rem;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+  }
+  .badge-alerta.prealerta { background: #FBF0DD; color: var(--mango); }
+  .badge-alerta.alerta { background: #F7E4D6; color: #C8763E; }
+  .badge-alerta.exceso { background: var(--coral-fondo); color: var(--coral); }
 
   /* ---------- Pie de version ---------- */
   footer#pie-version {
@@ -403,8 +417,7 @@
     .acciones-header { width: 100%; justify-content: space-between; }
 
     .resumen { gap: 0.5rem; }
-    .resumen .tarjeta { padding: 0.65rem 0.7rem; }
-    .resumen .tarjeta span.valor { font-size: 1rem; }
+    .resumen .tarjeta { padding: 0.6rem 0.55rem; }
     .resumen .tarjeta span.label { font-size: 0.66rem; }
 
     section.bloque { padding: 1rem; }
@@ -627,13 +640,9 @@
     <h3>Cuentas</h3>
     <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
       <input type="hidden" id="cuenta-campo-id" value="">
-      <div class="campo-ancho">
-        <label for="cuenta-campo-nombre">Nombre</label>
-        <input type="text" id="cuenta-campo-nombre" placeholder="Ej. Banreservas Ahorros" required>
-      </div>
       <div>
         <label for="cuenta-campo-tipo">Tipo</label>
-        <select id="cuenta-campo-tipo" required>
+        <select id="cuenta-campo-tipo" required onchange="actualizarCamposCuenta()">
           <option value="Ahorro">Ahorro</option>
           <option value="Debito">Débito</option>
           <option value="Tarjeta de credito">Tarjeta de crédito</option>
@@ -643,13 +652,60 @@
         </select>
       </div>
       <div>
+        <label for="cuenta-campo-nombre">Nombre</label>
+        <input type="text" id="cuenta-campo-nombre" placeholder="Ej. Banreservas Ahorros" required>
+      </div>
+      <div>
         <label for="cuenta-campo-institucion">Institución (opcional)</label>
         <input type="text" id="cuenta-campo-institucion" placeholder="Ej. Banreservas">
       </div>
-      <div class="campo-ancho">
-        <label for="cuenta-campo-saldo">Saldo inicial (RD$)</label>
+      <div>
+        <label for="cuenta-campo-saldo" id="cuenta-label-saldo">Saldo inicial (RD$)</label>
         <input type="number" id="cuenta-campo-saldo" step="0.01" value="0">
       </div>
+
+      <!-- Campos especificos de Tarjeta de credito -->
+      <div class="campo-ancho campos-tipo" id="campos-tarjeta" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+          <div>
+            <label for="cuenta-campo-corte">Día de corte</label>
+            <input type="number" id="cuenta-campo-corte" min="1" max="31" placeholder="Ej. 15">
+          </div>
+          <div>
+            <label for="cuenta-campo-limite-pago">Fecha límite de pago</label>
+            <input type="date" id="cuenta-campo-limite-pago">
+          </div>
+          <div>
+            <label for="cuenta-campo-limite-credito">Límite de crédito (RD$)</label>
+            <input type="number" id="cuenta-campo-limite-credito" step="0.01" min="0">
+          </div>
+          <div>
+            <label for="cuenta-campo-balance-corte">Balance al corte (RD$)</label>
+            <input type="number" id="cuenta-campo-balance-corte" step="0.01">
+          </div>
+          <div class="campo-ancho">
+            <label for="cuenta-campo-tasa">Tasa de interés anual (%)</label>
+            <input type="number" id="cuenta-campo-tasa" step="0.01" min="0">
+          </div>
+        </div>
+      </div>
+
+      <!-- Campo especifico de Prestamo (dentro de Cuentas) -->
+      <div class="campo-ancho campos-tipo" id="campos-prestamo-cuenta" style="display:none;">
+        <label for="cuenta-campo-tasa-prestamo">Tasa de interés anual (%, opcional)</label>
+        <input type="number" id="cuenta-campo-tasa-prestamo" step="0.01" min="0">
+        <p style="font-size:0.75rem; color:var(--texto-secundario); margin:6px 0 0;">
+          Para llevar balance, cuota y pagos con detalle, usa el panel de <strong>Préstamos</strong> —
+          aquí solo se registra como cuenta para poder asignarle transacciones.
+        </p>
+      </div>
+
+      <!-- Campo especifico de Inversion -->
+      <div class="campo-ancho campos-tipo" id="campos-inversion" style="display:none;">
+        <label for="cuenta-campo-tasa-inversion">Tasa de rendimiento anual (%, opcional)</label>
+        <input type="number" id="cuenta-campo-tasa-inversion" step="0.01" min="0">
+      </div>
+
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="cuenta-btn-guardar" style="flex:1;">Agregar cuenta</button>
         <button type="button" class="secundario" id="cuenta-btn-cancelar" onclick="cancelarEdicionCuenta()" style="display:none;">Cancelar</button>
@@ -740,8 +796,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "4.1";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 8:15 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "4.2";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 9:30 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -1045,14 +1101,28 @@
     }
     cuentasCache.forEach(cuenta => {
       const saldo = calcularSaldoCuenta(cuenta['Nombre']);
+      const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito' || cuenta['Tipo'] === 'Prestamo';
+      const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
+      const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
+
+      let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
+      if (cuenta['Tipo'] === 'Tarjeta de credito') {
+        const limite = parseFloat(cuenta['Limite de credito']) || 0;
+        if (limite > 0) {
+          const disponible = Math.max(0, limite - saldo);
+          detalleExtra += ` · Disponible RD$${disponible.toLocaleString('es-DO', {minimumFractionDigits:2})}`;
+        }
+        if (cuenta['Fecha de corte']) detalleExtra += ` · Corte día ${cuenta['Fecha de corte']}`;
+      }
+
       const li = document.createElement('li');
       li.innerHTML = `
         <div class="item-info">
           <div class="categoria">${cuenta['Nombre']}</div>
-          <div class="detalle">${cuenta['Tipo']}${cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : ''}</div>
+          <div class="detalle">${detalleExtra}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span class="item-monto cifra">RD$${saldo.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
           <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
           <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
         </div>
@@ -1062,24 +1132,54 @@
   }
 
   // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
+  // Saldo de una cuenta. Para cuentas "activo" (Ahorro/Debito/Efectivo/Inversion):
+  // ingresos suman, gastos restan. Para cuentas "pasivo" (Tarjeta de credito/Prestamo)
+  // es al reves: un gasto con esa tarjeta AUMENTA lo que debes, y un pago (transferencia
+  // hacia esa cuenta) lo REDUCE.
   function calcularSaldoCuenta(nombreCuenta) {
     const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    const esPasivo = cuenta && (cuenta['Tipo'] === 'Tarjeta de credito' || cuenta['Tipo'] === 'Prestamo');
     let saldo = cuenta ? (parseFloat(cuenta['Saldo inicial']) || 0) : 0;
 
     transaccionesCache.forEach(t => {
       if (t['Cuenta'] === nombreCuenta) {
         const monto = parseFloat(t['Monto']) || 0;
-        if (t['Tipo (ingreso/gasto)'] === 'ingreso') saldo += monto; else saldo -= monto;
+        const esIngreso = t['Tipo (ingreso/gasto)'] === 'ingreso';
+        if (esPasivo) {
+          saldo += esIngreso ? -monto : monto; // un gasto en la tarjeta aumenta la deuda
+        } else {
+          saldo += esIngreso ? monto : -monto;
+        }
       }
     });
 
     transferenciasCache.forEach(tr => {
       const monto = parseFloat(tr['Monto']) || 0;
-      if (tr['Cuenta origen'] === nombreCuenta) saldo -= monto;
-      if (tr['Cuenta destino'] === nombreCuenta) saldo += monto;
+      if (esPasivo) {
+        // Pagar la tarjeta/prestamo (transferencia hacia ella) reduce la deuda
+        if (tr['Cuenta destino'] === nombreCuenta) saldo -= monto;
+        if (tr['Cuenta origen'] === nombreCuenta) saldo += monto;
+      } else {
+        if (tr['Cuenta origen'] === nombreCuenta) saldo -= monto;
+        if (tr['Cuenta destino'] === nombreCuenta) saldo += monto;
+      }
     });
 
     return saldo;
+  }
+
+  function actualizarCamposCuenta() {
+    const tipo = document.getElementById('cuenta-campo-tipo').value;
+    document.getElementById('campos-tarjeta').style.display = (tipo === 'Tarjeta de credito') ? 'block' : 'none';
+    document.getElementById('campos-prestamo-cuenta').style.display = (tipo === 'Prestamo') ? 'block' : 'none';
+    document.getElementById('campos-inversion').style.display = (tipo === 'Inversion') ? 'block' : 'none';
+
+    const labelSaldo = document.getElementById('cuenta-label-saldo');
+    if (tipo === 'Tarjeta de credito' || tipo === 'Prestamo') {
+      labelSaldo.textContent = 'Deuda actual (RD$)';
+    } else {
+      labelSaldo.textContent = 'Saldo inicial (RD$)';
+    }
   }
 
   function editarCuenta(id) {
@@ -1087,10 +1187,19 @@
     if (!cuenta) return;
     cuentaEditandoId = id;
     document.getElementById('cuenta-campo-id').value = id;
-    document.getElementById('cuenta-campo-nombre').value = cuenta['Nombre'];
     document.getElementById('cuenta-campo-tipo').value = cuenta['Tipo'];
+    document.getElementById('cuenta-campo-nombre').value = cuenta['Nombre'];
     document.getElementById('cuenta-campo-institucion').value = cuenta['Institucion'] || '';
     document.getElementById('cuenta-campo-saldo').value = cuenta['Saldo inicial'] || 0;
+    document.getElementById('cuenta-campo-corte').value = cuenta['Fecha de corte'] || '';
+    const limitePago = cuenta['Fecha limite de pago'] ? new Date(cuenta['Fecha limite de pago']) : null;
+    document.getElementById('cuenta-campo-limite-pago').value = limitePago ? limitePago.toISOString().split('T')[0] : '';
+    document.getElementById('cuenta-campo-limite-credito').value = cuenta['Limite de credito'] || '';
+    document.getElementById('cuenta-campo-balance-corte').value = cuenta['Balance al corte'] || '';
+    document.getElementById('cuenta-campo-tasa').value = cuenta['Tasa de interes anual'] || '';
+    document.getElementById('cuenta-campo-tasa-prestamo').value = cuenta['Tasa de interes anual'] || '';
+    document.getElementById('cuenta-campo-tasa-inversion').value = cuenta['Tasa de interes anual'] || '';
+    actualizarCamposCuenta();
     document.getElementById('cuenta-btn-guardar').textContent = 'Guardar cambios';
     document.getElementById('cuenta-btn-cancelar').style.display = 'inline-block';
     document.getElementById('form-cuenta').scrollIntoView({ behavior: 'smooth' });
@@ -1102,6 +1211,7 @@
     document.getElementById('cuenta-campo-id').value = '';
     document.getElementById('cuenta-btn-guardar').textContent = 'Agregar cuenta';
     document.getElementById('cuenta-btn-cancelar').style.display = 'none';
+    actualizarCamposCuenta();
   }
 
   async function eliminarCuenta(id) {
@@ -1125,11 +1235,22 @@
     const boton = document.getElementById('cuenta-btn-guardar');
     boton.disabled = true;
 
+    const tipo = document.getElementById('cuenta-campo-tipo').value;
+    let tasaInteres = '';
+    if (tipo === 'Tarjeta de credito') tasaInteres = document.getElementById('cuenta-campo-tasa').value;
+    else if (tipo === 'Prestamo') tasaInteres = document.getElementById('cuenta-campo-tasa-prestamo').value;
+    else if (tipo === 'Inversion') tasaInteres = document.getElementById('cuenta-campo-tasa-inversion').value;
+
     const payload = {
       nombre: document.getElementById('cuenta-campo-nombre').value.trim(),
-      tipo: document.getElementById('cuenta-campo-tipo').value,
+      tipo: tipo,
       institucion: document.getElementById('cuenta-campo-institucion').value.trim(),
-      saldoInicial: parseFloat(document.getElementById('cuenta-campo-saldo').value) || 0
+      saldoInicial: parseFloat(document.getElementById('cuenta-campo-saldo').value) || 0,
+      fechaCorte: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-corte').value : '',
+      fechaLimitePago: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-pago').value : '',
+      limiteCredito: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-credito').value : '',
+      balanceCorte: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-balance-corte').value : '',
+      tasaInteres: tasaInteres
     };
 
     try {
@@ -1553,16 +1674,20 @@
     delMes.forEach(p => {
       const limite = parseFloat(p['Monto limite']) || 0;
       const gastado = gastos[p['Categoria']] || 0;
-      const pct = limite > 0 ? Math.min(100, (gastado / limite * 100)) : 0;
+      const pctReal = limite > 0 ? (gastado / limite * 100) : 0;
+      const pct = Math.min(100, pctReal);
+
       let clase = 'ok';
-      if (pct >= 100) clase = 'exceso';
-      else if (pct >= 70) clase = 'warn';
+      let etiqueta = '';
+      if (pctReal >= 100) { clase = 'exceso'; etiqueta = '<span class="badge-alerta exceso">Límite superado</span>'; }
+      else if (pctReal >= 90) { clase = 'alerta'; etiqueta = '<span class="badge-alerta alerta">Alerta</span>'; }
+      else if (pctReal >= 70) { clase = 'prealerta'; etiqueta = '<span class="badge-alerta prealerta">Pre-alerta</span>'; }
 
       const fila = document.createElement('div');
       fila.className = 'barra-categoria';
       fila.innerHTML = `
         <div class="fila-etiqueta">
-          <span>${p['Categoria']}</span>
+          <span>${p['Categoria']} ${etiqueta}</span>
           <span class="cifra">RD$${gastado.toLocaleString('es-DO', {minimumFractionDigits:2})} / RD$${limite.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
         <div class="pista"><div class="relleno ${clase}" style="width:${pct}%"></div></div>
