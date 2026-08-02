@@ -92,6 +92,88 @@
   /* ---------- Pantalla principal ---------- */
   #app-screen { display: none; max-width: 720px; margin: 0 auto; }
 
+  /* ---------- Boton de menu (hamburguesa) ---------- */
+  .btn-menu {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    background: var(--superficie);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-menu span { width: 16px; height: 2px; background: var(--teal); border-radius: 2px; }
+
+  /* ---------- Menu lateral (drawer) ---------- */
+  #menu-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 30, 27, 0.45);
+    z-index: 40;
+  }
+  #menu-overlay.abierto { display: block; }
+
+  #menu-lateral {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 260px;
+    max-width: 80vw;
+    background: var(--superficie);
+    z-index: 50;
+    padding: 1.25rem 0.75rem;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.08);
+  }
+  #menu-lateral.abierto { transform: translateX(0); }
+
+  .menu-titulo {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--teal-oscuro);
+    padding: 0.4rem 0.75rem 1rem;
+  }
+  .menu-grupo {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--texto-secundario);
+    padding: 0.9rem 0.75rem 0.3rem;
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    color: var(--texto);
+    cursor: pointer;
+  }
+  .menu-item:hover { background: var(--fondo); }
+  .menu-item.activo { background: var(--teal-claro); color: var(--teal-oscuro); font-weight: 600; }
+  .menu-item.proximamente { color: var(--texto-secundario); cursor: default; }
+  .menu-item.proximamente:hover { background: none; }
+  .menu-item.proximamente em { font-size: 0.72rem; font-style: normal; opacity: 0.75; }
+  .punto { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .punto-teal { background: var(--teal); }
+  .punto-mango { background: var(--mango); }
+  .punto-gris { background: var(--texto-secundario); }
+
+  /* ---------- Paneles de contenido ---------- */
+  .panel { display: none; }
+  .panel.activo { display: block; }
+
   header.app-header {
     display: flex;
     justify-content: space-between;
@@ -330,15 +412,73 @@
 
 <div id="app-screen">
   <header class="app-header">
-    <h2>Hola, <span id="nombre-usuario"></span><span class="rol" id="rol"></span></h2>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button class="btn-menu" onclick="abrirMenu()" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+      </button>
+      <h2>Hola, <span id="nombre-usuario"></span><span class="rol" id="rol"></span></h2>
+    </div>
     <div class="acciones-header">
       <span id="ultima-sync" class="texto-sync"></span>
       <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
     </div>
   </header>
 
+  <!-- Menu lateral -->
+  <div id="menu-overlay" onclick="cerrarMenu()"></div>
+  <nav id="menu-lateral">
+    <div class="menu-titulo">Centro Familiar</div>
+
+    <div class="menu-item activo" data-panel="dashboard" onclick="mostrarSeccion('dashboard')">
+      <span class="punto punto-teal"></span>Dashboard
+    </div>
+
+    <div class="menu-grupo">FINANZAS</div>
+    <div class="menu-item" data-panel="finanzas" onclick="mostrarSeccion('finanzas')">
+      <span class="punto punto-teal"></span>Finanzas
+    </div>
+    <div class="menu-item" data-panel="categorias" onclick="mostrarSeccion('categorias')">
+      <span class="punto punto-teal"></span>Categorías
+    </div>
+    <div class="menu-item" data-panel="cuentas" onclick="mostrarSeccion('cuentas')">
+      <span class="punto punto-teal"></span>Cuentas
+    </div>
+    <div class="menu-item" data-panel="transferencias" onclick="mostrarSeccion('transferencias')">
+      <span class="punto punto-teal"></span>Transferencias
+    </div>
+    <div class="menu-item" data-panel="prestamos" onclick="mostrarSeccion('prestamos')">
+      <span class="punto punto-teal"></span>Préstamos
+    </div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-teal"></span>Presupuestos <em>(próximamente)</em>
+    </div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-teal"></span>Metas <em>(próximamente)</em>
+    </div>
+
+    <div class="menu-grupo">HOGAR</div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-mango"></span>Calendario <em>(próximamente)</em>
+    </div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-mango"></span>Lista de compras <em>(próximamente)</em>
+    </div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-mango"></span>Inventario <em>(próximamente)</em>
+    </div>
+
+    <div class="menu-grupo">OTROS</div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-gris"></span>Reportes <em>(próximamente)</em>
+    </div>
+    <div class="menu-item proximamente">
+      <span class="punto punto-gris"></span>Usuarios <em>(próximamente)</em>
+    </div>
+  </nav>
+
   <div id="mensaje-estado"></div>
 
+  <div class="panel activo" id="panel-dashboard">
   <div class="resumen">
     <div class="tarjeta saldo">
       <span class="label">Saldo total</span>
@@ -353,7 +493,9 @@
       <span class="valor" id="valor-gastos">RD$0</span>
     </div>
   </div>
+  </div>
 
+  <div class="panel" id="panel-finanzas">
   <section class="bloque">
     <h3>Registrar movimiento</h3>
     <form id="form-transaccion" onsubmit="return agregarTransaccion(event)">
@@ -394,7 +536,9 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+  </div>
 
+  <div class="panel" id="panel-categorias">
   <section class="bloque">
     <h3>Categorías</h3>
     <form id="form-categoria" onsubmit="return guardarCategoria(event)">
@@ -424,7 +568,9 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+  </div>
 
+  <div class="panel" id="panel-cuentas">
   <section class="bloque">
     <h3>Cuentas</h3>
     <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
@@ -462,7 +608,9 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+  </div>
 
+  <div class="panel" id="panel-transferencias">
   <section class="bloque">
     <h3>Transferencias entre cuentas</h3>
     <form id="form-transferencia" onsubmit="return agregarTransferencia(event)">
@@ -489,7 +637,9 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+  </div>
 
+  <div class="panel" id="panel-prestamos">
   <section class="bloque">
     <h3>Préstamos</h3>
     <form id="form-prestamo" onsubmit="return guardarPrestamo(event)">
@@ -528,6 +678,7 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+  </div>
 </div>
 
 <footer id="pie-version"></footer>
@@ -537,8 +688,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "3.1";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 5:45 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "4.0";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 7:20 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -1176,8 +1327,29 @@
       return;
     }
 
+    const payload = { id: id, monto: monto };
+
+    // Si el prestamo no tiene cuenta asociada, preguntar desde cual cuenta se paga
+    if (!prestamo['Cuenta asociada']) {
+      const nombresCuentas = cuentasCache.map(c => c['Nombre']);
+      if (nombresCuentas.length === 0) {
+        mostrarMensaje('Este préstamo no tiene cuenta asociada y no hay cuentas creadas. Crea una cuenta primero.', 'error');
+        return;
+      }
+      const cuentaElegida = prompt(
+        '¿Desde qué cuenta harás este pago?\nOpciones: ' + nombresCuentas.join(', '),
+        nombresCuentas[0]
+      );
+      if (cuentaElegida === null) return;
+      if (!nombresCuentas.includes(cuentaElegida)) {
+        mostrarMensaje('Esa cuenta no existe. Escribe el nombre exacto de una cuenta ya creada.', 'error');
+        return;
+      }
+      payload.cuentaPago = cuentaElegida;
+    }
+
     try {
-      const resp = await llamarAPI('registrarPagoPrestamo', { id: id, monto: monto });
+      const resp = await llamarAPI('registrarPagoPrestamo', payload);
       if (resp.ok) {
         mostrarMensaje('Pago registrado correctamente', 'ok');
         await cargarPrestamos();
@@ -1287,6 +1459,29 @@
       boton.textContent = 'Guardar';
     }
     return false;
+  }
+
+  // ---------- Navegacion (menu lateral) ----------
+  function abrirMenu() {
+    document.getElementById('menu-lateral').classList.add('abierto');
+    document.getElementById('menu-overlay').classList.add('abierto');
+  }
+
+  function cerrarMenu() {
+    document.getElementById('menu-lateral').classList.remove('abierto');
+    document.getElementById('menu-overlay').classList.remove('abierto');
+  }
+
+  function mostrarSeccion(nombre) {
+    document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('activo'));
+    document.getElementById('panel-' + nombre).classList.add('activo');
+
+    document.querySelectorAll('.menu-item[data-panel]').forEach(item => {
+      item.classList.toggle('activo', item.getAttribute('data-panel') === nombre);
+    });
+
+    cerrarMenu();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function cerrarSesion() {
