@@ -173,15 +173,18 @@
   form#form-transaccion,
   form#form-categoria,
   form#form-cuenta,
-  form#form-transferencia { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-transferencia,
+  form#form-prestamo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
-  form#form-transferencia .campo-ancho { grid-column: 1 / -1; }
+  form#form-transferencia .campo-ancho,
+  form#form-prestamo .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
-  form#form-transferencia label {
+  form#form-transferencia label,
+  form#form-prestamo label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -194,7 +197,9 @@
   form#form-cuenta input,
   form#form-cuenta select,
   form#form-transferencia input,
-  form#form-transferencia select {
+  form#form-transferencia select,
+  form#form-prestamo input,
+  form#form-prestamo select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -293,7 +298,8 @@
     form#form-transaccion,
     form#form-categoria,
     form#form-cuenta,
-    form#form-transferencia { grid-template-columns: 1fr; }
+    form#form-transferencia,
+    form#form-prestamo { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -483,6 +489,45 @@
       <li class="vacio">Cargando...</li>
     </ul>
   </section>
+
+  <section class="bloque">
+    <h3>Préstamos</h3>
+    <form id="form-prestamo" onsubmit="return guardarPrestamo(event)">
+      <input type="hidden" id="prestamo-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="prestamo-campo-nombre">Nombre</label>
+        <input type="text" id="prestamo-campo-nombre" placeholder="Ej. Préstamo vehicular" required>
+      </div>
+      <div>
+        <label for="prestamo-campo-monto-original">Monto original (RD$)</label>
+        <input type="number" id="prestamo-campo-monto-original" step="0.01" min="0" required>
+      </div>
+      <div>
+        <label for="prestamo-campo-balance">Balance pendiente (RD$)</label>
+        <input type="number" id="prestamo-campo-balance" step="0.01" min="0" required>
+      </div>
+      <div>
+        <label for="prestamo-campo-cuota">Cuota mensual (RD$)</label>
+        <input type="number" id="prestamo-campo-cuota" step="0.01" min="0" required>
+      </div>
+      <div>
+        <label for="prestamo-campo-fecha">Próxima fecha de pago</label>
+        <input type="date" id="prestamo-campo-fecha">
+      </div>
+      <div class="campo-ancho">
+        <label for="prestamo-campo-cuenta">Cuenta asociada (opcional)</label>
+        <select id="prestamo-campo-cuenta"></select>
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="prestamo-btn-guardar" style="flex:1;">Agregar préstamo</button>
+        <button type="button" class="secundario" id="prestamo-btn-cancelar" onclick="cancelarEdicionPrestamo()" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+
+    <ul id="lista-prestamos" style="margin-top:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
 </div>
 
 <footer id="pie-version"></footer>
@@ -492,8 +537,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "3.0";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 4:50 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "3.1";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 5:45 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -564,7 +609,8 @@
       elementoActivo.closest('#form-transaccion') ||
       elementoActivo.closest('#form-categoria') ||
       elementoActivo.closest('#form-cuenta') ||
-      elementoActivo.closest('#form-transferencia')
+      elementoActivo.closest('#form-transferencia') ||
+      elementoActivo.closest('#form-prestamo')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
     if (escribiendoEnFormulario) return;
@@ -573,6 +619,7 @@
     await cargarCategorias();
     await cargarTransacciones();
     await cargarTransferencias();
+    await cargarPrestamos();
     actualizarUltimaSincronizacion();
   }
 
@@ -977,6 +1024,171 @@
       boton.textContent = 'Transferir';
     }
     return false;
+  }
+
+  // ---------- Prestamos ----------
+  let prestamosCache = [];
+  let prestamoEditandoId = null;
+
+  async function cargarPrestamos() {
+    const resp = await llamarAPI('getPrestamos');
+    if (resp.ok) {
+      prestamosCache = resp.datos;
+      poblarSelectCuentaPrestamo();
+      renderizarPrestamos();
+    }
+  }
+
+  function poblarSelectCuentaPrestamo() {
+    const select = document.getElementById('prestamo-campo-cuenta');
+    const valorPrevio = select.value;
+    select.innerHTML = '';
+    const optVacia = document.createElement('option');
+    optVacia.value = '';
+    optVacia.textContent = '(sin cuenta asociada)';
+    select.appendChild(optVacia);
+    cuentasCache.forEach(cuenta => {
+      const opt = document.createElement('option');
+      opt.value = cuenta['Nombre'];
+      opt.textContent = cuenta['Nombre'];
+      select.appendChild(opt);
+    });
+    if (valorPrevio) select.value = valorPrevio;
+  }
+
+  function renderizarPrestamos() {
+    const lista = document.getElementById('lista-prestamos');
+    lista.innerHTML = '';
+    if (prestamosCache.length === 0) {
+      lista.innerHTML = '<li class="vacio">Aún no has registrado ningún préstamo</li>';
+      return;
+    }
+    prestamosCache.forEach(p => {
+      const balance = parseFloat(p['Balance pendiente']) || 0;
+      const cuota = parseFloat(p['Cuota mensual']) || 0;
+      const proxima = p['Proxima fecha de pago'] ? new Date(p['Proxima fecha de pago']).toLocaleDateString('es-DO') : 'Sin definir';
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${p['Nombre']}</div>
+          <div class="detalle">Cuota RD$${cuota.toLocaleString('es-DO', {minimumFractionDigits:2})} · Próximo pago: ${proxima}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="item-monto cifra gasto">RD$${balance.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <button type="button" class="secundario" onclick="registrarPagoPrestamo('${p['ID']}')">Registrar pago</button>
+          <button type="button" class="secundario" onclick="editarPrestamo('${p['ID']}')">Editar</button>
+          <button type="button" class="secundario" onclick="eliminarPrestamo('${p['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  function editarPrestamo(id) {
+    const p = prestamosCache.find(x => String(x['ID']) === String(id));
+    if (!p) return;
+    prestamoEditandoId = id;
+    document.getElementById('prestamo-campo-id').value = id;
+    document.getElementById('prestamo-campo-nombre').value = p['Nombre'];
+    document.getElementById('prestamo-campo-monto-original').value = p['Monto original'] || 0;
+    document.getElementById('prestamo-campo-balance').value = p['Balance pendiente'] || 0;
+    document.getElementById('prestamo-campo-cuota').value = p['Cuota mensual'] || 0;
+    const fecha = p['Proxima fecha de pago'] ? new Date(p['Proxima fecha de pago']) : null;
+    document.getElementById('prestamo-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('prestamo-campo-cuenta').value = p['Cuenta asociada'] || '';
+    document.getElementById('prestamo-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-prestamo').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionPrestamo() {
+    prestamoEditandoId = null;
+    document.getElementById('form-prestamo').reset();
+    document.getElementById('prestamo-campo-id').value = '';
+    document.getElementById('prestamo-btn-guardar').textContent = 'Agregar préstamo';
+    document.getElementById('prestamo-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarPrestamo(id) {
+    if (!confirm('¿Eliminar este préstamo? Esto no elimina los pagos ya registrados como gastos.')) return;
+    try {
+      const resp = await llamarAPI('deletePrestamo', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Préstamo eliminado', 'ok');
+        await cargarPrestamos();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarPrestamo(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('prestamo-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      nombre: document.getElementById('prestamo-campo-nombre').value.trim(),
+      montoOriginal: parseFloat(document.getElementById('prestamo-campo-monto-original').value) || 0,
+      balancePendiente: parseFloat(document.getElementById('prestamo-campo-balance').value) || 0,
+      cuotaMensual: parseFloat(document.getElementById('prestamo-campo-cuota').value) || 0,
+      proximaFechaPago: document.getElementById('prestamo-campo-fecha').value,
+      cuentaAsociada: document.getElementById('prestamo-campo-cuenta').value
+    };
+
+    try {
+      let resp;
+      if (prestamoEditandoId) {
+        payload.id = prestamoEditandoId;
+        resp = await llamarAPI('updatePrestamo', payload);
+      } else {
+        resp = await llamarAPI('addPrestamo', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(prestamoEditandoId ? 'Préstamo actualizado' : 'Préstamo agregado', 'ok');
+        cancelarEdicionPrestamo();
+        await cargarPrestamos();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
+  }
+
+  async function registrarPagoPrestamo(id) {
+    const prestamo = prestamosCache.find(p => String(p['ID']) === String(id));
+    if (!prestamo) return;
+    const sugerido = parseFloat(prestamo['Cuota mensual']) || 0;
+    const montoStr = prompt('Monto del pago (RD$):', sugerido || '');
+    if (montoStr === null) return;
+    const monto = parseFloat(montoStr);
+    if (isNaN(monto) || monto <= 0) {
+      mostrarMensaje('El monto del pago no es válido', 'error');
+      return;
+    }
+
+    try {
+      const resp = await llamarAPI('registrarPagoPrestamo', { id: id, monto: monto });
+      if (resp.ok) {
+        mostrarMensaje('Pago registrado correctamente', 'ok');
+        await cargarPrestamos();
+        await cargarTransacciones(); // el pago tambien se registro como gasto
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al registrar el pago: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo registrar el pago: ' + err.message, 'error');
+    }
   }
 
   async function cargarTransacciones() {
