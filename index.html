@@ -377,8 +377,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "1.4";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 12:10 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "1.6";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 1:05 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -440,6 +440,14 @@
   }
 
   async function sincronizarDatos() {
+    // No interrumpir si el usuario esta escribiendo/seleccionando algo en los formularios
+    const elementoActivo = document.activeElement;
+    const escribiendoEnFormulario = elementoActivo && (
+      elementoActivo.closest('#form-transaccion') || elementoActivo.closest('#form-categoria')
+    ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
+
+    if (escribiendoEnFormulario) return;
+
     await cargarCategorias();
     await cargarTransacciones();
     actualizarUltimaSincronizacion();
@@ -482,6 +490,7 @@
 
   function poblarSelectCategorias() {
     const select = document.getElementById('campo-categoria');
+    const valorPrevio = select.value; // recordar que tenia seleccionado antes de reconstruir
     select.innerHTML = '';
     const filtradas = categoriasCache.filter(c => c['Tipo (ingreso/gasto)'] === tipoSeleccionado);
     if (filtradas.length === 0) {
@@ -496,6 +505,10 @@
       opt.textContent = cat['Nombre'];
       select.appendChild(opt);
     });
+    // Restaurar la seleccion anterior si esa categoria sigue existiendo
+    if (valorPrevio && filtradas.some(c => c['Nombre'] === valorPrevio)) {
+      select.value = valorPrevio;
+    }
   }
 
   // ---------- Categorías editables ----------
@@ -615,7 +628,7 @@
       return;
     }
 
-    const transacciones = resp.datos.slice().reverse();
+    const transacciones = (resp.datos || []).slice().reverse();
     let totalIngresos = 0, totalGastos = 0;
 
     lista.innerHTML = '';
