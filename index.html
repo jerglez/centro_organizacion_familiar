@@ -754,11 +754,13 @@
     <form id="form-transferencia" onsubmit="return agregarTransferencia(event)">
       <div>
         <label for="transf-origen">Desde</label>
-        <select id="transf-origen" required></select>
+        <select id="transf-origen" required onchange="actualizarSaldosTransferencia()"></select>
+        <div class="texto-sync" id="transf-origen-saldo" style="margin-top:4px;"></div>
       </div>
       <div>
         <label for="transf-destino">Hacia</label>
-        <select id="transf-destino" required onchange="actualizarOpcionesPagoTarjeta()"></select>
+        <select id="transf-destino" required onchange="actualizarOpcionesPagoTarjeta(); actualizarSaldosTransferencia();"></select>
+        <div class="texto-sync" id="transf-destino-saldo" style="margin-top:4px;"></div>
       </div>
       <div class="campo-ancho" id="opciones-pago-tarjeta" style="display:none;">
         <label>Pagar</label>
@@ -803,7 +805,7 @@
         <input type="number" id="prestamo-campo-balance" step="0.01" min="0" required>
       </div>
       <div>
-        <label for="prestamo-campo-cuota">Cuota mensual (RD$)</label>
+        <label for="prestamo-campo-cuota">Cuota mensual / Abono (RD$)</label>
         <input type="number" id="prestamo-campo-cuota" step="0.01" min="0" required>
       </div>
       <div>
@@ -820,6 +822,7 @@
       </div>
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="prestamo-btn-guardar" style="flex:1;">Agregar préstamo</button>
+        <button type="button" class="guardar" id="prestamo-btn-aplicar-pago" onclick="aplicarPagoPrestamo()" style="flex:1; display:none; background:var(--verde);">Aplicar pago</button>
         <button type="button" class="secundario" id="prestamo-btn-cancelar" onclick="cancelarEdicionPrestamo()" style="display:none;">Cancelar</button>
       </div>
     </form>
@@ -839,7 +842,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "5.4";
+  const VERSION_APP = "5.5";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1124,6 +1127,7 @@
     poblarUnSelectDeCuentas(document.getElementById('transf-destino'), activas);
 
     actualizarOpcionesPagoTarjeta();
+    actualizarSaldosTransferencia();
   }
 
   // La cuenta valida para un movimiento depende de si es ingreso o gasto:
@@ -1157,6 +1161,23 @@
     if (valorPrevio && lista.some(c => c['Nombre'] === valorPrevio)) {
       select.value = valorPrevio;
     }
+  }
+
+  // Texto "Saldo: RD$X" o "Debes: RD$X" segun el tipo de cuenta
+  function textoSaldoCuenta(nombreCuenta) {
+    const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    if (!cuenta) return '';
+    const saldo = calcularSaldoCuenta(nombreCuenta);
+    const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
+    const etiqueta = esPasivo ? 'Debes' : 'Saldo';
+    return etiqueta + ': RD$' + Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2});
+  }
+
+  function actualizarSaldosTransferencia() {
+    const origen = document.getElementById('transf-origen').value;
+    const destino = document.getElementById('transf-destino').value;
+    document.getElementById('transf-origen-saldo').textContent = origen ? textoSaldoCuenta(origen) : '';
+    document.getElementById('transf-destino-saldo').textContent = destino ? textoSaldoCuenta(destino) : '';
   }
 
   function actualizarOpcionesPagoTarjeta() {
@@ -1492,6 +1513,7 @@
   let prestamosCache = [];
   let historialPagosCache = [];
   let prestamoEditandoId = null;
+  let prestamoPagandoId = null;
 
   async function cargarPrestamos() {
     const resp = await llamarAPI('getPrestamos');
@@ -1535,14 +1557,14 @@
       li.style.display = 'block';
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div class="item-info">
+          <div class="item-info" style="cursor:pointer;" onclick="prepararPagoPrestamo('${p['ID']}')" title="Clic para registrar un pago">
             <div class="categoria">${p['Nombre']}</div>
             <div class="detalle">Cuota RD$${cuota.toLocaleString('es-DO', {minimumFractionDigits:2})} · Próximo pago: ${proxima}${tasa ? ' · Tasa ' + tasa + '% anual' : ''}</div>
           </div>
           <span class="item-monto cifra gasto">RD$${balance.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button type="button" class="secundario" onclick="registrarPagoPrestamo('${p['ID']}')">Registrar pago</button>
+          <button type="button" class="secundario" onclick="prepararPagoPrestamo('${p['ID']}')">Registrar pago</button>
           <button type="button" class="secundario" onclick="toggleHistorialPrestamo('${p['ID']}')">Ver historial</button>
           <button type="button" class="secundario" onclick="editarPrestamo('${p['ID']}')">Editar</button>
           <button type="button" class="secundario" onclick="eliminarPrestamo('${p['ID']}')">Eliminar</button>
@@ -1588,7 +1610,13 @@
     }).join('');
   }
 
+  const CAMPOS_BLOQUEABLES_PRESTAMO = [
+    'prestamo-campo-nombre', 'prestamo-campo-monto-original',
+    'prestamo-campo-balance', 'prestamo-campo-fecha', 'prestamo-campo-tasa'
+  ];
+
   function editarPrestamo(id) {
+    cancelarEdicionPrestamo(); // limpia cualquier modo anterior (edicion o pago)
     const p = prestamosCache.find(x => String(x['ID']) === String(id));
     if (!p) return;
     prestamoEditandoId = id;
@@ -1602,15 +1630,51 @@
     document.getElementById('prestamo-campo-tasa').value = p['Tasa de interes anual'] || '';
     document.getElementById('prestamo-campo-cuenta').value = p['Cuenta asociada'] || '';
     document.getElementById('prestamo-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('prestamo-btn-guardar').style.display = 'inline-block';
+    document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-prestamo').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  // Carga el prestamo en el formulario en "modo pago": bloquea Nombre, Monto original,
+  // Balance pendiente, Proxima fecha y Tasa (se actualizan solos al aplicar el pago),
+  // dejando editables solo Cuota/Abono y Cuenta asociada.
+  function prepararPagoPrestamo(id) {
+    cancelarEdicionPrestamo();
+    const p = prestamosCache.find(x => String(x['ID']) === String(id));
+    if (!p) return;
+    prestamoPagandoId = id;
+
+    document.getElementById('prestamo-campo-id').value = id;
+    document.getElementById('prestamo-campo-nombre').value = p['Nombre'];
+    document.getElementById('prestamo-campo-monto-original').value = p['Monto original'] || 0;
+    document.getElementById('prestamo-campo-balance').value = p['Balance pendiente'] || 0;
+    document.getElementById('prestamo-campo-cuota').value = p['Cuota mensual'] || 0;
+    const fecha = p['Proxima fecha de pago'] ? new Date(p['Proxima fecha de pago']) : null;
+    document.getElementById('prestamo-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('prestamo-campo-tasa').value = p['Tasa de interes anual'] || '';
+    document.getElementById('prestamo-campo-cuenta').value = p['Cuenta asociada'] || '';
+
+    CAMPOS_BLOQUEABLES_PRESTAMO.forEach(idCampo => {
+      document.getElementById(idCampo).disabled = true;
+    });
+
+    document.getElementById('prestamo-btn-guardar').style.display = 'none';
+    document.getElementById('prestamo-btn-aplicar-pago').style.display = 'inline-block';
     document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
     document.getElementById('form-prestamo').scrollIntoView({ behavior: 'smooth' });
   }
 
   function cancelarEdicionPrestamo() {
     prestamoEditandoId = null;
+    prestamoPagandoId = null;
     document.getElementById('form-prestamo').reset();
     document.getElementById('prestamo-campo-id').value = '';
+    CAMPOS_BLOQUEABLES_PRESTAMO.forEach(idCampo => {
+      document.getElementById(idCampo).disabled = false;
+    });
     document.getElementById('prestamo-btn-guardar').textContent = 'Agregar préstamo';
+    document.getElementById('prestamo-btn-guardar').style.display = 'inline-block';
+    document.getElementById('prestamo-btn-aplicar-pago').style.display = 'none';
     document.getElementById('prestamo-btn-cancelar').style.display = 'none';
   }
 
@@ -1632,6 +1696,10 @@
 
   async function guardarPrestamo(evento) {
     evento.preventDefault();
+    if (prestamoPagandoId) {
+      aplicarPagoPrestamo();
+      return false;
+    }
     const boton = document.getElementById('prestamo-btn-guardar');
     boton.disabled = true;
 
@@ -1670,43 +1738,25 @@
     return false;
   }
 
-  async function registrarPagoPrestamo(id) {
-    const prestamo = prestamosCache.find(p => String(p['ID']) === String(id));
-    if (!prestamo) return;
-    const sugerido = parseFloat(prestamo['Cuota mensual']) || 0;
-    const montoStr = prompt('Monto del pago (RD$):', sugerido || '');
-    if (montoStr === null) return;
-    const monto = parseFloat(montoStr);
+  async function aplicarPagoPrestamo() {
+    if (!prestamoPagandoId) return;
+    const id = prestamoPagandoId;
+    const monto = parseFloat(document.getElementById('prestamo-campo-cuota').value);
     if (isNaN(monto) || monto <= 0) {
-      mostrarMensaje('El monto del pago no es válido', 'error');
+      mostrarMensaje('Ingresa un monto de abono válido', 'error');
       return;
     }
+    const cuentaPago = document.getElementById('prestamo-campo-cuenta').value;
 
-    const payload = { id: id, monto: monto };
-
-    // Si el prestamo no tiene cuenta asociada, preguntar desde cual cuenta se paga
-    if (!prestamo['Cuenta asociada']) {
-      const nombresCuentas = cuentasCache.map(c => c['Nombre']);
-      if (nombresCuentas.length === 0) {
-        mostrarMensaje('Este préstamo no tiene cuenta asociada y no hay cuentas creadas. Crea una cuenta primero.', 'error');
-        return;
-      }
-      const cuentaElegida = prompt(
-        '¿Desde qué cuenta harás este pago?\nOpciones: ' + nombresCuentas.join(', '),
-        nombresCuentas[0]
-      );
-      if (cuentaElegida === null) return;
-      if (!nombresCuentas.includes(cuentaElegida)) {
-        mostrarMensaje('Esa cuenta no existe. Escribe el nombre exacto de una cuenta ya creada.', 'error');
-        return;
-      }
-      payload.cuentaPago = cuentaElegida;
-    }
+    const boton = document.getElementById('prestamo-btn-aplicar-pago');
+    boton.disabled = true;
+    boton.textContent = 'Aplicando...';
 
     try {
-      const resp = await llamarAPI('registrarPagoPrestamo', payload);
+      const resp = await llamarAPI('registrarPagoPrestamo', { id: id, monto: monto, cuentaPago: cuentaPago });
       if (resp.ok) {
-        mostrarMensaje('Pago registrado correctamente', 'ok');
+        mostrarMensaje('Pago aplicado correctamente', 'ok');
+        cancelarEdicionPrestamo();
         await cargarPrestamos();
         await cargarTransacciones(); // el pago tambien se registro como gasto
         await cargarHistorialPagos();
@@ -1716,10 +1766,13 @@
         }
         actualizarUltimaSincronizacion();
       } else {
-        mostrarMensaje('Error al registrar el pago: ' + resp.error, 'error');
+        mostrarMensaje('Error al aplicar el pago: ' + resp.error, 'error');
       }
     } catch (err) {
-      mostrarMensaje('No se pudo registrar el pago: ' + err.message, 'error');
+      mostrarMensaje('No se pudo aplicar el pago: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Aplicar pago';
     }
   }
 
