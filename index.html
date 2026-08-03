@@ -646,7 +646,6 @@
           <option value="Ahorro">Ahorro</option>
           <option value="Debito">Débito</option>
           <option value="Tarjeta de credito">Tarjeta de crédito</option>
-          <option value="Prestamo">Préstamo</option>
           <option value="Inversion">Inversión</option>
           <option value="Efectivo">Efectivo</option>
         </select>
@@ -688,16 +687,6 @@
             <input type="number" id="cuenta-campo-tasa" step="0.01" min="0">
           </div>
         </div>
-      </div>
-
-      <!-- Campo especifico de Prestamo (dentro de Cuentas) -->
-      <div class="campo-ancho campos-tipo" id="campos-prestamo-cuenta" style="display:none;">
-        <label for="cuenta-campo-tasa-prestamo">Tasa de interés anual (%, opcional)</label>
-        <input type="number" id="cuenta-campo-tasa-prestamo" step="0.01" min="0">
-        <p style="font-size:0.75rem; color:var(--texto-secundario); margin:6px 0 0;">
-          Para llevar balance, cuota y pagos con detalle, usa el panel de <strong>Préstamos</strong> —
-          aquí solo se registra como cuenta para poder asignarle transacciones.
-        </p>
       </div>
 
       <!-- Campo especifico de Inversion -->
@@ -772,6 +761,10 @@
         <label for="prestamo-campo-fecha">Próxima fecha de pago</label>
         <input type="date" id="prestamo-campo-fecha">
       </div>
+      <div>
+        <label for="prestamo-campo-tasa">Tasa de interés anual (%, opcional)</label>
+        <input type="number" id="prestamo-campo-tasa" step="0.01" min="0">
+      </div>
       <div class="campo-ancho">
         <label for="prestamo-campo-cuenta">Cuenta asociada (opcional)</label>
         <select id="prestamo-campo-cuenta"></select>
@@ -796,8 +789,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "4.2";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 9:30 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "4.3";
+  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 10:05 pm (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -879,6 +872,7 @@
     await cargarTransacciones();
     await cargarTransferencias();
     await cargarPrestamos();
+    await cargarHistorialPagos();
     await cargarPresupuestos();
     actualizarUltimaSincronizacion();
   }
@@ -1101,7 +1095,7 @@
     }
     cuentasCache.forEach(cuenta => {
       const saldo = calcularSaldoCuenta(cuenta['Nombre']);
-      const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito' || cuenta['Tipo'] === 'Prestamo';
+      const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
       const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
       const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
 
@@ -1138,7 +1132,7 @@
   // hacia esa cuenta) lo REDUCE.
   function calcularSaldoCuenta(nombreCuenta) {
     const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
-    const esPasivo = cuenta && (cuenta['Tipo'] === 'Tarjeta de credito' || cuenta['Tipo'] === 'Prestamo');
+    const esPasivo = cuenta && cuenta['Tipo'] === 'Tarjeta de credito';
     let saldo = cuenta ? (parseFloat(cuenta['Saldo inicial']) || 0) : 0;
 
     transaccionesCache.forEach(t => {
@@ -1171,15 +1165,10 @@
   function actualizarCamposCuenta() {
     const tipo = document.getElementById('cuenta-campo-tipo').value;
     document.getElementById('campos-tarjeta').style.display = (tipo === 'Tarjeta de credito') ? 'block' : 'none';
-    document.getElementById('campos-prestamo-cuenta').style.display = (tipo === 'Prestamo') ? 'block' : 'none';
     document.getElementById('campos-inversion').style.display = (tipo === 'Inversion') ? 'block' : 'none';
 
     const labelSaldo = document.getElementById('cuenta-label-saldo');
-    if (tipo === 'Tarjeta de credito' || tipo === 'Prestamo') {
-      labelSaldo.textContent = 'Deuda actual (RD$)';
-    } else {
-      labelSaldo.textContent = 'Saldo inicial (RD$)';
-    }
+    labelSaldo.textContent = (tipo === 'Tarjeta de credito') ? 'Deuda actual (RD$)' : 'Saldo inicial (RD$)';
   }
 
   function editarCuenta(id) {
@@ -1197,7 +1186,6 @@
     document.getElementById('cuenta-campo-limite-credito').value = cuenta['Limite de credito'] || '';
     document.getElementById('cuenta-campo-balance-corte').value = cuenta['Balance al corte'] || '';
     document.getElementById('cuenta-campo-tasa').value = cuenta['Tasa de interes anual'] || '';
-    document.getElementById('cuenta-campo-tasa-prestamo').value = cuenta['Tasa de interes anual'] || '';
     document.getElementById('cuenta-campo-tasa-inversion').value = cuenta['Tasa de interes anual'] || '';
     actualizarCamposCuenta();
     document.getElementById('cuenta-btn-guardar').textContent = 'Guardar cambios';
@@ -1238,7 +1226,6 @@
     const tipo = document.getElementById('cuenta-campo-tipo').value;
     let tasaInteres = '';
     if (tipo === 'Tarjeta de credito') tasaInteres = document.getElementById('cuenta-campo-tasa').value;
-    else if (tipo === 'Prestamo') tasaInteres = document.getElementById('cuenta-campo-tasa-prestamo').value;
     else if (tipo === 'Inversion') tasaInteres = document.getElementById('cuenta-campo-tasa-inversion').value;
 
     const payload = {
@@ -1353,6 +1340,7 @@
 
   // ---------- Prestamos ----------
   let prestamosCache = [];
+  let historialPagosCache = [];
   let prestamoEditandoId = null;
 
   async function cargarPrestamos() {
@@ -1391,22 +1379,63 @@
     prestamosCache.forEach(p => {
       const balance = parseFloat(p['Balance pendiente']) || 0;
       const cuota = parseFloat(p['Cuota mensual']) || 0;
+      const tasa = p['Tasa de interes anual'] ? parseFloat(p['Tasa de interes anual']) : null;
       const proxima = p['Proxima fecha de pago'] ? new Date(p['Proxima fecha de pago']).toLocaleDateString('es-DO') : 'Sin definir';
       const li = document.createElement('li');
+      li.style.display = 'block';
       li.innerHTML = `
-        <div class="item-info">
-          <div class="categoria">${p['Nombre']}</div>
-          <div class="detalle">Cuota RD$${cuota.toLocaleString('es-DO', {minimumFractionDigits:2})} · Próximo pago: ${proxima}</div>
-        </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="item-info">
+            <div class="categoria">${p['Nombre']}</div>
+            <div class="detalle">Cuota RD$${cuota.toLocaleString('es-DO', {minimumFractionDigits:2})} · Próximo pago: ${proxima}${tasa ? ' · Tasa ' + tasa + '% anual' : ''}</div>
+          </div>
           <span class="item-monto cifra gasto">RD$${balance.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           <button type="button" class="secundario" onclick="registrarPagoPrestamo('${p['ID']}')">Registrar pago</button>
+          <button type="button" class="secundario" onclick="toggleHistorialPrestamo('${p['ID']}')">Ver historial</button>
           <button type="button" class="secundario" onclick="editarPrestamo('${p['ID']}')">Editar</button>
           <button type="button" class="secundario" onclick="eliminarPrestamo('${p['ID']}')">Eliminar</button>
         </div>
+        <div id="historial-${p['ID']}" style="display:none; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
       `;
       lista.appendChild(li);
     });
+  }
+
+  async function cargarHistorialPagos() {
+    const resp = await llamarAPI('getHistorialPagos');
+    if (resp.ok) historialPagosCache = resp.datos || [];
+  }
+
+  function toggleHistorialPrestamo(prestamoId) {
+    const cont = document.getElementById('historial-' + prestamoId);
+    if (!cont) return;
+    const abrir = cont.style.display !== 'block';
+    cont.style.display = abrir ? 'block' : 'none';
+    if (abrir) renderizarHistorialPrestamo(prestamoId);
+  }
+
+  function renderizarHistorialPrestamo(prestamoId) {
+    const cont = document.getElementById('historial-' + prestamoId);
+    if (!cont) return;
+    const registros = historialPagosCache
+      .filter(h => String(h['Prestamo ID']) === String(prestamoId))
+      .slice().reverse();
+
+    if (registros.length === 0) {
+      cont.innerHTML = '<p class="vacio">Aún no hay pagos registrados para este préstamo</p>';
+      return;
+    }
+    cont.innerHTML = registros.map(h => {
+      const fecha = h['Fecha'] ? new Date(h['Fecha']).toLocaleDateString('es-DO') : '';
+      const monto = parseFloat(h['Monto']) || 0;
+      const balanceDespues = parseFloat(h['Balance despues']) || 0;
+      return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
+        <span>${fecha}</span>
+        <span class="cifra">-RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})} · quedó RD$${balanceDespues.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      </div>`;
+    }).join('');
   }
 
   function editarPrestamo(id) {
@@ -1420,6 +1449,7 @@
     document.getElementById('prestamo-campo-cuota').value = p['Cuota mensual'] || 0;
     const fecha = p['Proxima fecha de pago'] ? new Date(p['Proxima fecha de pago']) : null;
     document.getElementById('prestamo-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('prestamo-campo-tasa').value = p['Tasa de interes anual'] || '';
     document.getElementById('prestamo-campo-cuenta').value = p['Cuenta asociada'] || '';
     document.getElementById('prestamo-btn-guardar').textContent = 'Guardar cambios';
     document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
@@ -1461,6 +1491,7 @@
       balancePendiente: parseFloat(document.getElementById('prestamo-campo-balance').value) || 0,
       cuotaMensual: parseFloat(document.getElementById('prestamo-campo-cuota').value) || 0,
       proximaFechaPago: document.getElementById('prestamo-campo-fecha').value,
+      tasaInteres: document.getElementById('prestamo-campo-tasa').value,
       cuentaAsociada: document.getElementById('prestamo-campo-cuenta').value
     };
 
@@ -1528,6 +1559,11 @@
         mostrarMensaje('Pago registrado correctamente', 'ok');
         await cargarPrestamos();
         await cargarTransacciones(); // el pago tambien se registro como gasto
+        await cargarHistorialPagos();
+        const contHistorial = document.getElementById('historial-' + id);
+        if (contHistorial && contHistorial.style.display === 'block') {
+          renderizarHistorialPrestamo(id);
+        }
         actualizarUltimaSincronizacion();
       } else {
         mostrarMensaje('Error al registrar el pago: ' + resp.error, 'error');
