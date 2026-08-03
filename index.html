@@ -839,7 +839,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "5.3";
+  const VERSION_APP = "5.4";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1132,7 +1132,7 @@
   function poblarSelectCuentaFinanzas() {
     const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
     const tiposPermitidos = tipoSeleccionado === 'ingreso'
-      ? ['Ahorro', 'Debito', 'Efectivo']
+      ? ['Ahorro', 'Debito', 'Efectivo', 'Inversion']
       : ['Ahorro', 'Debito', 'Efectivo', 'Tarjeta de credito'];
     const permitidas = activas.filter(c => tiposPermitidos.includes(c['Tipo']));
     poblarUnSelectDeCuentas(document.getElementById('campo-cuenta'), permitidas);
@@ -1228,6 +1228,13 @@
         }
         if (cuenta['Fecha de corte']) detalleExtra += ` · Corte día ${cuenta['Fecha de corte']}`;
       }
+      if (cuenta['Tipo'] === 'Inversion') {
+        const aportado = calcularAportadoInversion(cuenta['Nombre']);
+        const ganancia = calcularGananciaInversion(cuenta['Nombre']);
+        const pctGanancia = aportado > 0 ? (ganancia / aportado * 100) : 0;
+        detalleExtra += ` · Aportado RD$${aportado.toLocaleString('es-DO', {minimumFractionDigits:2})}` +
+          ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
+      }
 
       const li = document.createElement('li');
       li.innerHTML = `
@@ -1250,6 +1257,29 @@
   // ingresos suman, gastos restan. Para cuentas "pasivo" (Tarjeta de credito/Prestamo)
   // es al reves: un gasto con esa tarjeta AUMENTA lo que debes, y un pago (transferencia
   // hacia esa cuenta) lo REDUCE.
+  // Para cuentas de Inversion: separa cuanto es dinero aportado (saldo inicial +
+  // transferencias) de cuanto es ganancia real (ingresos registrados, ej. intereses).
+  function calcularAportadoInversion(nombreCuenta) {
+    const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    let aportado = cuenta ? (parseFloat(cuenta['Saldo inicial']) || 0) : 0;
+    transferenciasCache.forEach(tr => {
+      const monto = parseFloat(tr['Monto']) || 0;
+      if (tr['Cuenta origen'] === nombreCuenta) aportado -= monto;
+      if (tr['Cuenta destino'] === nombreCuenta) aportado += monto;
+    });
+    return aportado;
+  }
+
+  function calcularGananciaInversion(nombreCuenta) {
+    let ganancia = 0;
+    transaccionesCache.forEach(t => {
+      if (t['Cuenta'] === nombreCuenta && t['Tipo (ingreso/gasto)'] === 'ingreso') {
+        ganancia += parseFloat(t['Monto']) || 0;
+      }
+    });
+    return ganancia;
+  }
+
   function calcularSaldoCuenta(nombreCuenta) {
     const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
     const esPasivo = cuenta && cuenta['Tipo'] === 'Tarjeta de credito';
