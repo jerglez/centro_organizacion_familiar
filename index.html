@@ -723,10 +723,6 @@
             <label for="cuenta-campo-balance-corte">Balance al corte (RD$)</label>
             <input type="number" id="cuenta-campo-balance-corte" step="0.01">
           </div>
-          <div>
-            <label for="cuenta-campo-pago-minimo">Pago mínimo (RD$)</label>
-            <input type="number" id="cuenta-campo-pago-minimo" step="0.01" min="0">
-          </div>
           <div class="campo-ancho">
             <label for="cuenta-campo-tasa">Tasa de interés anual (%)</label>
             <input type="number" id="cuenta-campo-tasa" step="0.01" min="0">
@@ -767,7 +763,6 @@
       <div class="campo-ancho" id="opciones-pago-tarjeta" style="display:none;">
         <label>Pagar</label>
         <div style="display:flex; gap:6px; flex-wrap:wrap;">
-          <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('minimo')">Pago mínimo</button>
           <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('corte')">Balance al corte</button>
           <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('actual')">Balance a la fecha</button>
           <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('otro')">Otro</button>
@@ -842,12 +837,18 @@
   // Pega aqui la URL /exec que copiaste al publicar tu Apps Script
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
-  // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "5.1";
-  const FECHA_ULTIMA_ACTUALIZACION = "30 jul 2026, 10:05 am (GMT-4, hora Santo Domingo)";
+  // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
+  // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
+  const VERSION_APP = "5.3";
 
+  const fechaModificacion = new Date(document.lastModified);
+  const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
+    timeZone: 'America/Santo_Domingo',
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
   document.getElementById('pie-version').textContent =
-    "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
+    "Versión " + VERSION_APP + " · Última actualización: " + fechaFormateada + " (hora Santo Domingo)";
 
   let tokenActual = null;
   let categoriasCache = [];
@@ -999,16 +1000,18 @@
     document.getElementById('cat-campo-tipo').value = tipo;
     document.getElementById('cat-btn-ingreso').classList.toggle('activo', tipo === 'ingreso');
     document.getElementById('cat-btn-gasto').classList.toggle('activo', tipo === 'gasto');
+    renderizarCategorias();
   }
 
   function renderizarCategorias() {
     const lista = document.getElementById('lista-categorias');
     lista.innerHTML = '';
-    if (categoriasCache.length === 0) {
-      lista.innerHTML = '<li class="vacio">No hay categorías creadas</li>';
+    const filtradas = categoriasCache.filter(c => c['Tipo (ingreso/gasto)'] === tipoCategoriaSeleccionado);
+    if (filtradas.length === 0) {
+      lista.innerHTML = '<li class="vacio">No hay categorías de ' + (tipoCategoriaSeleccionado === 'ingreso' ? 'ingreso' : 'gasto') + ' creadas</li>';
       return;
     }
-    categoriasCache.forEach(cat => {
+    filtradas.forEach(cat => {
       const tipo = cat['Tipo (ingreso/gasto)'];
       const li = document.createElement('li');
       li.className = tipo;
@@ -1114,7 +1117,7 @@
 
   function poblarSelectsCuentas() {
     const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
-    const soloOrigenValido = activas.filter(c => c['Tipo'] === 'Ahorro' || c['Tipo'] === 'Debito');
+    const soloOrigenValido = activas.filter(c => c['Tipo'] === 'Ahorro' || c['Tipo'] === 'Debito' || c['Tipo'] === 'Inversion');
 
     poblarSelectCuentaFinanzas();
     poblarUnSelectDeCuentas(document.getElementById('transf-origen'), soloOrigenValido);
@@ -1177,8 +1180,7 @@
     }
 
     let monto = 0;
-    if (opcion === 'minimo') monto = parseFloat(cuenta['Pago minimo']) || 0;
-    else if (opcion === 'corte') monto = parseFloat(cuenta['Balance al corte']) || 0;
+    if (opcion === 'corte') monto = parseFloat(cuenta['Balance al corte']) || 0;
     else if (opcion === 'actual') monto = calcularSaldoCuenta(nombreCuenta);
 
     if (!monto || monto <= 0) {
@@ -1303,7 +1305,6 @@
     document.getElementById('cuenta-campo-limite-pago').value = limitePago ? limitePago.toISOString().split('T')[0] : '';
     document.getElementById('cuenta-campo-limite-credito').value = cuenta['Limite de credito'] || '';
     document.getElementById('cuenta-campo-balance-corte').value = cuenta['Balance al corte'] || '';
-    document.getElementById('cuenta-campo-pago-minimo').value = cuenta['Pago minimo'] || '';
     document.getElementById('cuenta-campo-tasa').value = cuenta['Tasa de interes anual'] || '';
     document.getElementById('cuenta-campo-tasa-inversion').value = cuenta['Tasa de interes anual'] || '';
     actualizarCamposCuenta();
@@ -1347,17 +1348,6 @@
     if (tipo === 'Tarjeta de credito') tasaInteres = document.getElementById('cuenta-campo-tasa').value;
     else if (tipo === 'Inversion') tasaInteres = document.getElementById('cuenta-campo-tasa-inversion').value;
 
-    const balanceCorteVal = parseFloat(document.getElementById('cuenta-campo-balance-corte').value) || 0;
-    const tasaVal = parseFloat(document.getElementById('cuenta-campo-tasa').value) || 0;
-    let pagoMinimoInput = document.getElementById('cuenta-campo-pago-minimo').value;
-    let pagoMinimoEstimado = false;
-
-    if (tipo === 'Tarjeta de credito' && !pagoMinimoInput && balanceCorteVal > 0) {
-      const interesMensual = balanceCorteVal * (tasaVal / 100 / 12);
-      pagoMinimoInput = (interesMensual + balanceCorteVal * 0.01).toFixed(2);
-      pagoMinimoEstimado = true;
-    }
-
     const payload = {
       nombre: document.getElementById('cuenta-campo-nombre').value.trim(),
       tipo: tipo,
@@ -1367,7 +1357,6 @@
       fechaLimitePago: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-pago').value : '',
       limiteCredito: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-credito').value : '',
       balanceCorte: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-balance-corte').value : '',
-      pagoMinimo: tipo === 'Tarjeta de credito' ? pagoMinimoInput : '',
       tasaInteres: tasaInteres
     };
 
@@ -1381,9 +1370,7 @@
       }
 
       if (resp.ok) {
-        let mensajeExito = cuentaEditandoId ? 'Cuenta actualizada' : 'Cuenta agregada';
-        if (pagoMinimoEstimado) mensajeExito += ' — pago mínimo estimado en RD$' + pagoMinimoInput + ' (interés + 1% del balance, puedes editarlo)';
-        mostrarMensaje(mensajeExito, 'ok');
+        mostrarMensaje(cuentaEditandoId ? 'Cuenta actualizada' : 'Cuenta agregada', 'ok');
         cancelarEdicionCuenta();
         await cargarCuentas();
         actualizarUltimaSincronizacion();
