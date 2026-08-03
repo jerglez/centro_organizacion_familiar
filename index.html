@@ -671,6 +671,10 @@
       <span class="label">Deudas en Tarjetas</span>
       <span class="valor" id="valor-total-deuda-tarjetas">RD$0</span>
     </div>
+    <div class="tarjeta ingresos">
+      <span class="label">Inversiones</span>
+      <span class="valor" id="valor-total-inversion">RD$0</span>
+    </div>
   </div>
 
   <section class="bloque">
@@ -839,8 +843,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "5.0";
-  const FECHA_ULTIMA_ACTUALIZACION = "30 jul 2026, 9:20 am (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "5.1";
+  const FECHA_ULTIMA_ACTUALIZACION = "30 jul 2026, 10:05 am (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -951,6 +955,7 @@
     document.getElementById('btn-ingreso').classList.toggle('activo', tipo === 'ingreso');
     document.getElementById('btn-gasto').classList.toggle('activo', tipo === 'gasto');
     poblarSelectCategorias();
+    poblarSelectCuentaFinanzas();
   }
 
   async function cargarCategorias() {
@@ -1111,11 +1116,23 @@
     const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
     const soloOrigenValido = activas.filter(c => c['Tipo'] === 'Ahorro' || c['Tipo'] === 'Debito');
 
-    poblarUnSelectDeCuentas(document.getElementById('campo-cuenta'), activas);
+    poblarSelectCuentaFinanzas();
     poblarUnSelectDeCuentas(document.getElementById('transf-origen'), soloOrigenValido);
     poblarUnSelectDeCuentas(document.getElementById('transf-destino'), activas);
 
     actualizarOpcionesPagoTarjeta();
+  }
+
+  // La cuenta valida para un movimiento depende de si es ingreso o gasto:
+  // un ingreso no tiene sentido en una tarjeta de credito; Inversion no aplica
+  // a ninguno de los dos (eso se maneja con Transferencias).
+  function poblarSelectCuentaFinanzas() {
+    const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
+    const tiposPermitidos = tipoSeleccionado === 'ingreso'
+      ? ['Ahorro', 'Debito', 'Efectivo']
+      : ['Ahorro', 'Debito', 'Efectivo', 'Tarjeta de credito'];
+    const permitidas = activas.filter(c => tiposPermitidos.includes(c['Tipo']));
+    poblarUnSelectDeCuentas(document.getElementById('campo-cuenta'), permitidas);
   }
 
   function poblarUnSelectDeCuentas(select, lista) {
@@ -1172,16 +1189,18 @@
   }
 
   function renderizarResumenCuentas() {
-    let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0;
+    let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0, totalInversion = 0;
     cuentasCache.forEach(c => {
       const saldo = calcularSaldoCuenta(c['Nombre']);
       if (c['Tipo'] === 'Ahorro') totalAhorro += saldo;
       else if (c['Tipo'] === 'Debito') totalDebito += saldo;
       else if (c['Tipo'] === 'Tarjeta de credito') totalDeudaTarjetas += saldo;
+      else if (c['Tipo'] === 'Inversion') totalInversion += saldo;
     });
     document.getElementById('valor-total-ahorro').textContent = 'RD$' + totalAhorro.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-total-debito').textContent = 'RD$' + totalDebito.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-total-deuda-tarjetas').textContent = 'RD$' + totalDeudaTarjetas.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-total-inversion').textContent = 'RD$' + totalInversion.toLocaleString('es-DO', {minimumFractionDigits:2});
   }
 
   function renderizarCuentas() {
@@ -1328,6 +1347,17 @@
     if (tipo === 'Tarjeta de credito') tasaInteres = document.getElementById('cuenta-campo-tasa').value;
     else if (tipo === 'Inversion') tasaInteres = document.getElementById('cuenta-campo-tasa-inversion').value;
 
+    const balanceCorteVal = parseFloat(document.getElementById('cuenta-campo-balance-corte').value) || 0;
+    const tasaVal = parseFloat(document.getElementById('cuenta-campo-tasa').value) || 0;
+    let pagoMinimoInput = document.getElementById('cuenta-campo-pago-minimo').value;
+    let pagoMinimoEstimado = false;
+
+    if (tipo === 'Tarjeta de credito' && !pagoMinimoInput && balanceCorteVal > 0) {
+      const interesMensual = balanceCorteVal * (tasaVal / 100 / 12);
+      pagoMinimoInput = (interesMensual + balanceCorteVal * 0.01).toFixed(2);
+      pagoMinimoEstimado = true;
+    }
+
     const payload = {
       nombre: document.getElementById('cuenta-campo-nombre').value.trim(),
       tipo: tipo,
@@ -1337,7 +1367,7 @@
       fechaLimitePago: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-pago').value : '',
       limiteCredito: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-credito').value : '',
       balanceCorte: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-balance-corte').value : '',
-      pagoMinimo: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-pago-minimo').value : '',
+      pagoMinimo: tipo === 'Tarjeta de credito' ? pagoMinimoInput : '',
       tasaInteres: tasaInteres
     };
 
@@ -1351,7 +1381,9 @@
       }
 
       if (resp.ok) {
-        mostrarMensaje(cuentaEditandoId ? 'Cuenta actualizada' : 'Cuenta agregada', 'ok');
+        let mensajeExito = cuentaEditandoId ? 'Cuenta actualizada' : 'Cuenta agregada';
+        if (pagoMinimoEstimado) mensajeExito += ' — pago mínimo estimado en RD$' + pagoMinimoInput + ' (interés + 1% del balance, puedes editarlo)';
+        mostrarMensaje(mensajeExito, 'ok');
         cancelarEdicionCuenta();
         await cargarCuentas();
         actualizarUltimaSincronizacion();
