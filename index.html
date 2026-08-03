@@ -361,6 +361,19 @@
   #mensaje-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
   .vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
 
+  /* ---------- Filtro de movimientos ---------- */
+  .filtro-movimientos { display: flex; gap: 6px; margin-bottom: 0.9rem; flex-wrap: wrap; }
+  .filtro-btn {
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    color: var(--texto-secundario);
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    cursor: pointer;
+  }
+  .filtro-btn.activo { background: var(--teal-claro); border-color: var(--teal); color: var(--teal-oscuro); font-weight: 600; }
+
   /* ---------- Barras de grafica de gastos y presupuesto ---------- */
   .barra-categoria { margin-bottom: 0.85rem; }
   .barra-categoria:last-child { margin-bottom: 0; }
@@ -582,6 +595,10 @@
         <label for="campo-cuenta">Cuenta</label>
         <select id="campo-cuenta" required></select>
       </div>
+      <div>
+        <label for="campo-fecha">Fecha (opcional)</label>
+        <input type="date" id="campo-fecha">
+      </div>
       <div class="campo-ancho">
         <label for="campo-descripcion">Descripción (opcional)</label>
         <input type="text" id="campo-descripcion" placeholder="Ej. Compra semanal">
@@ -597,6 +614,11 @@
 
   <section class="bloque">
     <h3>Movimientos recientes</h3>
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro="todos" onclick="cambiarFiltroMovimientos('todos')">Todos</button>
+      <button type="button" class="filtro-btn" data-filtro="semana" onclick="cambiarFiltroMovimientos('semana')">Última semana</button>
+      <button type="button" class="filtro-btn" data-filtro="mes" onclick="cambiarFiltroMovimientos('mes')">Este mes</button>
+    </div>
     <ul id="lista-transacciones">
       <li class="vacio">Cargando...</li>
     </ul>
@@ -636,6 +658,21 @@
   </div>
 
   <div class="panel" id="panel-cuentas">
+  <div class="resumen">
+    <div class="tarjeta ingresos">
+      <span class="label">Total Ahorros</span>
+      <span class="valor" id="valor-total-ahorro">RD$0</span>
+    </div>
+    <div class="tarjeta ingresos">
+      <span class="label">Total Débito</span>
+      <span class="valor" id="valor-total-debito">RD$0</span>
+    </div>
+    <div class="tarjeta gastos">
+      <span class="label">Deudas en Tarjetas</span>
+      <span class="valor" id="valor-total-deuda-tarjetas">RD$0</span>
+    </div>
+  </div>
+
   <section class="bloque">
     <h3>Cuentas</h3>
     <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
@@ -682,6 +719,10 @@
             <label for="cuenta-campo-balance-corte">Balance al corte (RD$)</label>
             <input type="number" id="cuenta-campo-balance-corte" step="0.01">
           </div>
+          <div>
+            <label for="cuenta-campo-pago-minimo">Pago mínimo (RD$)</label>
+            <input type="number" id="cuenta-campo-pago-minimo" step="0.01" min="0">
+          </div>
           <div class="campo-ancho">
             <label for="cuenta-campo-tasa">Tasa de interés anual (%)</label>
             <input type="number" id="cuenta-campo-tasa" step="0.01" min="0">
@@ -717,7 +758,16 @@
       </div>
       <div>
         <label for="transf-destino">Hacia</label>
-        <select id="transf-destino" required></select>
+        <select id="transf-destino" required onchange="actualizarOpcionesPagoTarjeta()"></select>
+      </div>
+      <div class="campo-ancho" id="opciones-pago-tarjeta" style="display:none;">
+        <label>Pagar</label>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('minimo')">Pago mínimo</button>
+          <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('corte')">Balance al corte</button>
+          <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('actual')">Balance a la fecha</button>
+          <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('otro')">Otro</button>
+        </div>
       </div>
       <div class="campo-ancho">
         <label for="transf-monto">Monto (RD$)</label>
@@ -789,8 +839,8 @@
   const API_URL = "https://script.google.com/macros/s/AKfycbww_S9sv0fB25uOmr9AH4A_u0pF469L1LWPVRJBTo_H-eRZRanMLiNHJHZyqeMxfNmNsw/exec";
 
   // Actualiza estos dos valores cada vez que subas una nueva version del HTML
-  const VERSION_APP = "4.3";
-  const FECHA_ULTIMA_ACTUALIZACION = "29 jul 2026, 10:05 pm (GMT-4, hora Santo Domingo)";
+  const VERSION_APP = "5.0";
+  const FECHA_ULTIMA_ACTUALIZACION = "30 jul 2026, 9:20 am (GMT-4, hora Santo Domingo)";
 
   document.getElementById('pie-version').textContent =
     "Versión " + VERSION_APP + " · Última actualización: " + FECHA_ULTIMA_ACTUALIZACION;
@@ -1059,34 +1109,83 @@
 
   function poblarSelectsCuentas() {
     const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
-    const selects = [
-      document.getElementById('campo-cuenta'),
-      document.getElementById('transf-origen'),
-      document.getElementById('transf-destino')
-    ];
+    const soloOrigenValido = activas.filter(c => c['Tipo'] === 'Ahorro' || c['Tipo'] === 'Debito');
 
-    selects.forEach(select => {
-      const valorPrevio = select.value;
-      select.innerHTML = '';
-      if (activas.length === 0) {
-        const opt = document.createElement('option');
-        opt.textContent = 'Crea una cuenta primero';
-        select.appendChild(opt);
-        return;
-      }
-      activas.forEach(cuenta => {
-        const opt = document.createElement('option');
-        opt.value = cuenta['Nombre'];
-        opt.textContent = cuenta['Nombre'] + ' (' + cuenta['Tipo'] + ')';
-        select.appendChild(opt);
-      });
-      if (valorPrevio && activas.some(c => c['Nombre'] === valorPrevio)) {
-        select.value = valorPrevio;
-      }
+    poblarUnSelectDeCuentas(document.getElementById('campo-cuenta'), activas);
+    poblarUnSelectDeCuentas(document.getElementById('transf-origen'), soloOrigenValido);
+    poblarUnSelectDeCuentas(document.getElementById('transf-destino'), activas);
+
+    actualizarOpcionesPagoTarjeta();
+  }
+
+  function poblarUnSelectDeCuentas(select, lista) {
+    if (!select) return;
+    const valorPrevio = select.value;
+    select.innerHTML = '';
+    if (lista.length === 0) {
+      const opt = document.createElement('option');
+      opt.textContent = 'No hay cuentas disponibles';
+      select.appendChild(opt);
+      return;
+    }
+    lista.forEach(cuenta => {
+      const opt = document.createElement('option');
+      opt.value = cuenta['Nombre'];
+      opt.textContent = cuenta['Nombre'] + ' (' + cuenta['Tipo'] + ')';
+      select.appendChild(opt);
     });
+    if (valorPrevio && lista.some(c => c['Nombre'] === valorPrevio)) {
+      select.value = valorPrevio;
+    }
+  }
+
+  function actualizarOpcionesPagoTarjeta() {
+    const destinoEl = document.getElementById('transf-destino');
+    const bloque = document.getElementById('opciones-pago-tarjeta');
+    if (!destinoEl || !bloque) return;
+    const cuenta = cuentasCache.find(c => c['Nombre'] === destinoEl.value);
+    bloque.style.display = (cuenta && cuenta['Tipo'] === 'Tarjeta de credito') ? 'block' : 'none';
+  }
+
+  function elegirMontoPagoTarjeta(opcion) {
+    const nombreCuenta = document.getElementById('transf-destino').value;
+    const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    const campoMonto = document.getElementById('transf-monto');
+    if (!cuenta) return;
+
+    if (opcion === 'otro') {
+      campoMonto.value = '';
+      campoMonto.focus();
+      return;
+    }
+
+    let monto = 0;
+    if (opcion === 'minimo') monto = parseFloat(cuenta['Pago minimo']) || 0;
+    else if (opcion === 'corte') monto = parseFloat(cuenta['Balance al corte']) || 0;
+    else if (opcion === 'actual') monto = calcularSaldoCuenta(nombreCuenta);
+
+    if (!monto || monto <= 0) {
+      mostrarMensaje('Ese dato no está definido para esta tarjeta. Edítala en Cuentas para agregarlo.', 'error');
+      return;
+    }
+    campoMonto.value = monto.toFixed(2);
+  }
+
+  function renderizarResumenCuentas() {
+    let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0;
+    cuentasCache.forEach(c => {
+      const saldo = calcularSaldoCuenta(c['Nombre']);
+      if (c['Tipo'] === 'Ahorro') totalAhorro += saldo;
+      else if (c['Tipo'] === 'Debito') totalDebito += saldo;
+      else if (c['Tipo'] === 'Tarjeta de credito') totalDeudaTarjetas += saldo;
+    });
+    document.getElementById('valor-total-ahorro').textContent = 'RD$' + totalAhorro.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-total-debito').textContent = 'RD$' + totalDebito.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-total-deuda-tarjetas').textContent = 'RD$' + totalDeudaTarjetas.toLocaleString('es-DO', {minimumFractionDigits:2});
   }
 
   function renderizarCuentas() {
+    renderizarResumenCuentas();
     const lista = document.getElementById('lista-cuentas');
     lista.innerHTML = '';
     if (cuentasCache.length === 0) {
@@ -1185,6 +1284,7 @@
     document.getElementById('cuenta-campo-limite-pago').value = limitePago ? limitePago.toISOString().split('T')[0] : '';
     document.getElementById('cuenta-campo-limite-credito').value = cuenta['Limite de credito'] || '';
     document.getElementById('cuenta-campo-balance-corte').value = cuenta['Balance al corte'] || '';
+    document.getElementById('cuenta-campo-pago-minimo').value = cuenta['Pago minimo'] || '';
     document.getElementById('cuenta-campo-tasa').value = cuenta['Tasa de interes anual'] || '';
     document.getElementById('cuenta-campo-tasa-inversion').value = cuenta['Tasa de interes anual'] || '';
     actualizarCamposCuenta();
@@ -1237,6 +1337,7 @@
       fechaLimitePago: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-pago').value : '',
       limiteCredito: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-credito').value : '',
       balanceCorte: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-balance-corte').value : '',
+      pagoMinimo: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-pago-minimo').value : '',
       tasaInteres: tasaInteres
     };
 
@@ -1574,15 +1675,13 @@
   }
 
   async function cargarTransacciones() {
-    const lista = document.getElementById('lista-transacciones');
     const resp = await llamarAPI('getTransacciones');
     if (!resp.ok) {
-      lista.innerHTML = '<li class="vacio">No se pudieron cargar los movimientos</li>';
+      document.getElementById('lista-transacciones').innerHTML = '<li class="vacio">No se pudieron cargar los movimientos</li>';
       return;
     }
 
     transaccionesCache = resp.datos || [];
-    const transacciones = transaccionesCache.slice().reverse();
 
     // El Saldo es acumulado de todo el historico (el dinero no se resetea cada mes)
     let saldoTotal = 0;
@@ -1593,12 +1692,7 @@
     const mesActual = ahora.getMonth();
     const anioActual = ahora.getFullYear();
 
-    lista.innerHTML = '';
-    if (transacciones.length === 0) {
-      lista.innerHTML = '<li class="vacio">Aún no hay movimientos registrados</li>';
-    }
-
-    transacciones.forEach(t => {
+    transaccionesCache.forEach(t => {
       const tipo = t['Tipo (ingreso/gasto)'];
       const monto = parseFloat(t['Monto']) || 0;
       const fechaTransaccion = t['Fecha'] ? new Date(t['Fecha']) : null;
@@ -1614,7 +1708,56 @@
       if (esDelMesActual) {
         if (tipo === 'ingreso') ingresosMes += monto; else gastosMes += monto;
       }
+    });
 
+    document.getElementById('valor-ingresos').textContent = 'RD$' + ingresosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-gastos').textContent = 'RD$' + gastosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-saldo').textContent = 'RD$' + saldoTotal.toLocaleString('es-DO', {minimumFractionDigits:2});
+
+    renderizarCuentas(); // el saldo por cuenta depende de las transacciones recien cargadas
+    renderizarGraficaGastos();
+    renderizarPresupuestosDashboard();
+    renderizarUltimosMovimientos();
+    renderizarListaTransacciones();
+  }
+
+  // ---------- Filtro de la lista de movimientos (Todos / Ultima semana / Mes) ----------
+  let filtroMovimientos = 'todos';
+
+  function cambiarFiltroMovimientos(valor) {
+    filtroMovimientos = valor;
+    document.querySelectorAll('.filtro-btn').forEach(b => b.classList.toggle('activo', b.dataset.filtro === valor));
+    renderizarListaTransacciones();
+  }
+
+  function cumpleFiltroMovimientos(fecha) {
+    if (filtroMovimientos === 'todos') return true;
+    if (!fecha) return false;
+    const ahora = new Date();
+    if (filtroMovimientos === 'semana') {
+      const haceUnaSemana = new Date(ahora);
+      haceUnaSemana.setDate(ahora.getDate() - 7);
+      return fecha >= haceUnaSemana;
+    }
+    if (filtroMovimientos === 'mes') {
+      return fecha.getMonth() === ahora.getMonth() && fecha.getFullYear() === ahora.getFullYear();
+    }
+    return true;
+  }
+
+  function renderizarListaTransacciones() {
+    const lista = document.getElementById('lista-transacciones');
+    lista.innerHTML = '';
+    const ordenados = transaccionesCache.slice().reverse();
+    let mostrados = 0;
+
+    ordenados.forEach(t => {
+      const fechaTransaccion = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!cumpleFiltroMovimientos(fechaTransaccion)) return;
+      mostrados++;
+
+      const tipo = t['Tipo (ingreso/gasto)'];
+      const monto = parseFloat(t['Monto']) || 0;
       const li = document.createElement('li');
       li.className = tipo;
       const fecha = fechaTransaccion ? fechaTransaccion.toLocaleDateString('es-DO') : '';
@@ -1628,14 +1771,9 @@
       lista.appendChild(li);
     });
 
-    document.getElementById('valor-ingresos').textContent = 'RD$' + ingresosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
-    document.getElementById('valor-gastos').textContent = 'RD$' + gastosMes.toLocaleString('es-DO', {minimumFractionDigits:2});
-    document.getElementById('valor-saldo').textContent = 'RD$' + saldoTotal.toLocaleString('es-DO', {minimumFractionDigits:2});
-
-    renderizarCuentas(); // el saldo por cuenta depende de las transacciones recien cargadas
-    renderizarGraficaGastos();
-    renderizarPresupuestosDashboard();
-    renderizarUltimosMovimientos();
+    if (mostrados === 0) {
+      lista.innerHTML = '<li class="vacio">No hay movimientos en este período</li>';
+    }
   }
 
   // ---------- Dashboard: grafica de gastos por categoria ----------
@@ -1805,6 +1943,7 @@
       monto: parseFloat(document.getElementById('campo-monto').value),
       categoria: document.getElementById('campo-categoria').value,
       cuenta: document.getElementById('campo-cuenta').value,
+      fecha: document.getElementById('campo-fecha').value, // si esta vacio, el backend usa la fecha de hoy
       descripcion: document.getElementById('campo-descripcion').value,
       comercio: document.getElementById('campo-comercio').value,
       fuente: 'manual'
