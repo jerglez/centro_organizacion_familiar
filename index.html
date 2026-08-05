@@ -820,6 +820,12 @@
         <label for="prestamo-campo-cuenta">Cuenta asociada (opcional)</label>
         <select id="prestamo-campo-cuenta"></select>
       </div>
+      <div class="campo-ancho" id="campo-adelanto-pago" style="display:none;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--texto);">
+          <input type="checkbox" id="prestamo-campo-adelanto" style="width:auto;">
+          Este pago es antes de la fecha programada (no actualizar la próxima fecha de pago)
+        </label>
+      </div>
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="prestamo-btn-guardar" style="flex:1;">Agregar préstamo</button>
         <button type="button" class="guardar" id="prestamo-btn-aplicar-pago" onclick="aplicarPagoPrestamo()" style="flex:1; display:none; background:var(--verde);">Aplicar pago</button>
@@ -842,7 +848,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "5.5";
+  const VERSION_APP = "5.6";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1603,8 +1609,10 @@
       const fecha = h['Fecha'] ? new Date(h['Fecha']).toLocaleDateString('es-DO') : '';
       const monto = parseFloat(h['Monto']) || 0;
       const balanceDespues = parseFloat(h['Balance despues']) || 0;
+      const esAdelanto = h['Adelanto'] === 'Si' || h['Adelanto'] === true;
+      const etiquetaAdelanto = esAdelanto ? ' <span class="badge-alerta prealerta">Adelanto</span>' : '';
       return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
-        <span>${fecha}</span>
+        <span>${fecha}${etiquetaAdelanto}</span>
         <span class="cifra">-RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})} · quedó RD$${balanceDespues.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
       </div>`;
     }).join('');
@@ -1661,6 +1669,8 @@
     document.getElementById('prestamo-btn-guardar').style.display = 'none';
     document.getElementById('prestamo-btn-aplicar-pago').style.display = 'inline-block';
     document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('campo-adelanto-pago').style.display = 'block';
+    document.getElementById('prestamo-campo-adelanto').checked = false;
     document.getElementById('form-prestamo').scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -1676,6 +1686,8 @@
     document.getElementById('prestamo-btn-guardar').style.display = 'inline-block';
     document.getElementById('prestamo-btn-aplicar-pago').style.display = 'none';
     document.getElementById('prestamo-btn-cancelar').style.display = 'none';
+    document.getElementById('campo-adelanto-pago').style.display = 'none';
+    document.getElementById('prestamo-campo-adelanto').checked = false;
   }
 
   async function eliminarPrestamo(id) {
@@ -1747,13 +1759,14 @@
       return;
     }
     const cuentaPago = document.getElementById('prestamo-campo-cuenta').value;
+    const esAdelanto = document.getElementById('prestamo-campo-adelanto').checked;
 
     const boton = document.getElementById('prestamo-btn-aplicar-pago');
     boton.disabled = true;
     boton.textContent = 'Aplicando...';
 
     try {
-      const resp = await llamarAPI('registrarPagoPrestamo', { id: id, monto: monto, cuentaPago: cuentaPago });
+      const resp = await llamarAPI('registrarPagoPrestamo', { id: id, monto: monto, cuentaPago: cuentaPago, esAdelanto: esAdelanto });
       if (resp.ok) {
         mostrarMensaje('Pago aplicado correctamente', 'ok');
         cancelarEdicionPrestamo();
