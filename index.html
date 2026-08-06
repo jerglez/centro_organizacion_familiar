@@ -259,17 +259,23 @@
   form#form-categoria,
   form#form-cuenta,
   form#form-transferencia,
-  form#form-prestamo { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-prestamo,
+  form#form-lista-compras,
+  form#form-usuario { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
   form#form-transferencia .campo-ancho,
-  form#form-prestamo .campo-ancho { grid-column: 1 / -1; }
+  form#form-prestamo .campo-ancho,
+  form#form-lista-compras .campo-ancho,
+  form#form-usuario .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
   form#form-transferencia label,
-  form#form-prestamo label {
+  form#form-prestamo label,
+  form#form-lista-compras label,
+  form#form-usuario label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -284,7 +290,11 @@
   form#form-transferencia input,
   form#form-transferencia select,
   form#form-prestamo input,
-  form#form-prestamo select {
+  form#form-prestamo select,
+  form#form-lista-compras input,
+  form#form-lista-compras select,
+  form#form-usuario input,
+  form#form-usuario select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -323,10 +333,14 @@
   /* ---------- Lista de transacciones ---------- */
   ul#lista-transacciones,
   #lista-categorias,
-  #lista-ultimos-movimientos { list-style: none; margin: 0; padding: 0; }
+  #lista-ultimos-movimientos,
+  #lista-usuarios,
+  #lista-compras-items { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
-  #lista-ultimos-movimientos li {
+  #lista-ultimos-movimientos li,
+  #lista-usuarios li,
+  #lista-compras-items li {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -342,7 +356,9 @@
   #lista-ultimos-movimientos li.gasto { border-left-color: var(--coral); }
   ul#lista-transacciones li:last-child,
   #lista-categorias li:last-child,
-  #lista-ultimos-movimientos li:last-child { border-bottom: none; }
+  #lista-ultimos-movimientos li:last-child,
+  #lista-usuarios li:last-child,
+  #lista-compras-items li:last-child { border-bottom: none; }
   .item-info { min-width: 0; flex: 1; margin-right: 0.5rem; }
   .item-info .categoria { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
   .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); word-break: break-word; }
@@ -449,7 +465,9 @@
     form#form-categoria,
     form#form-cuenta,
     form#form-transferencia,
-    form#form-prestamo { grid-template-columns: 1fr; }
+    form#form-prestamo,
+    form#form-lista-compras,
+    form#form-usuario { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -528,8 +546,8 @@
     <div class="menu-item proximamente">
       <span class="punto punto-mango"></span>Calendario <em>(próximamente)</em>
     </div>
-    <div class="menu-item proximamente">
-      <span class="punto punto-mango"></span>Lista de compras <em>(próximamente)</em>
+    <div class="menu-item" data-panel="listacompras" onclick="mostrarSeccion('listacompras')">
+      <span class="punto punto-mango"></span>Lista de compras
     </div>
     <div class="menu-item proximamente">
       <span class="punto punto-mango"></span>Inventario <em>(próximamente)</em>
@@ -539,8 +557,8 @@
     <div class="menu-item proximamente">
       <span class="punto punto-gris"></span>Reportes <em>(próximamente)</em>
     </div>
-    <div class="menu-item proximamente">
-      <span class="punto punto-gris"></span>Usuarios <em>(próximamente)</em>
+    <div class="menu-item" data-panel="usuarios" onclick="mostrarSeccion('usuarios')">
+      <span class="punto punto-gris"></span>Usuarios
     </div>
   </nav>
 
@@ -861,6 +879,72 @@
     </ul>
   </section>
   </div>
+
+  <div class="panel" id="panel-listacompras">
+  <section class="bloque">
+    <h3>Lista de compras</h3>
+    <form id="form-lista-compras" onsubmit="return guardarProductoLista(event)">
+      <input type="hidden" id="lista-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="lista-campo-producto">Producto</label>
+        <input type="text" id="lista-campo-producto" placeholder="Ej. Arroz" required>
+      </div>
+      <div>
+        <label for="lista-campo-cantidad">Cantidad</label>
+        <input type="number" id="lista-campo-cantidad" min="1" value="1">
+      </div>
+      <div>
+        <label for="lista-campo-categoria">Categoría (opcional)</label>
+        <input type="text" id="lista-campo-categoria" placeholder="Ej. Víveres">
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="lista-btn-guardar" style="flex:1;">Agregar producto</button>
+        <button type="button" class="secundario" id="lista-btn-cancelar" onclick="cancelarEdicionProductoLista()" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+
+    <ul id="lista-compras-items" style="margin-top:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
+  </div>
+
+  <div class="panel" id="panel-usuarios">
+  <section class="bloque">
+    <h3>Usuarios con acceso</h3>
+    <p id="usuarios-nota-permiso" class="vacio" style="display:none;">Solo un Admin puede agregar, editar o quitar usuarios. Tú puedes ver la lista.</p>
+    <form id="form-usuario" onsubmit="return guardarUsuario(event)" style="display:none;">
+      <input type="hidden" id="usuario-campo-email-original" value="">
+      <div class="campo-ancho">
+        <label for="usuario-campo-email">Correo de Google</label>
+        <input type="email" id="usuario-campo-email" placeholder="familiar@gmail.com" required>
+      </div>
+      <div>
+        <label for="usuario-campo-nombre">Nombre</label>
+        <input type="text" id="usuario-campo-nombre" required>
+      </div>
+      <div>
+        <label for="usuario-campo-rol">Rol</label>
+        <select id="usuario-campo-rol">
+          <option value="Miembro">Miembro</option>
+          <option value="Admin">Admin</option>
+        </select>
+      </div>
+      <div class="campo-ancho">
+        <label for="usuario-campo-notif">Correo de notificaciones (opcional)</label>
+        <input type="email" id="usuario-campo-notif" placeholder="Igual al correo de Google si se deja vacío">
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="usuario-btn-guardar" style="flex:1;">Agregar usuario</button>
+        <button type="button" class="secundario" id="usuario-btn-cancelar" onclick="cancelarEdicionUsuario()" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+
+    <ul id="lista-usuarios" style="margin-top:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+  </section>
+  </div>
 </div>
 
 <footer id="pie-version"></footer>
@@ -871,7 +955,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "6.1";
+  const VERSION_APP = "7.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -889,6 +973,8 @@
   let transferenciasCache = [];
   let tipoSeleccionado = "ingreso";
   let origenTransaccionPendiente = "manual";
+  let miEmail = '';
+  let miRol = '';
   let intervaloSincronizacion = null;
 
   function manejarLogin(response) {
@@ -919,6 +1005,14 @@
       document.getElementById('app-screen').style.display = 'block';
       document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
       document.getElementById('rol').textContent = datosUsuario.datos.rol;
+      miEmail = datosUsuario.datos.email;
+      miRol = datosUsuario.datos.rol;
+
+      if (miRol === 'Admin') {
+        document.getElementById('form-usuario').style.display = 'grid';
+      } else {
+        document.getElementById('usuarios-nota-permiso').style.display = 'block';
+      }
 
       await sincronizarDatos();
       if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
@@ -950,7 +1044,9 @@
       elementoActivo.closest('#form-categoria') ||
       elementoActivo.closest('#form-cuenta') ||
       elementoActivo.closest('#form-transferencia') ||
-      elementoActivo.closest('#form-prestamo')
+      elementoActivo.closest('#form-prestamo') ||
+      elementoActivo.closest('#form-lista-compras') ||
+      elementoActivo.closest('#form-usuario')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
     if (escribiendoEnFormulario) return;
@@ -962,6 +1058,8 @@
     await cargarPrestamos();
     await cargarHistorialPagos();
     await cargarPresupuestos();
+    await cargarListaCompras();
+    await cargarUsuarios();
     actualizarUltimaSincronizacion();
   }
 
@@ -2238,6 +2336,243 @@
 
     cerrarMenu();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // ---------- Lista de compras ----------
+  let listaComprasCache = [];
+  let productoListaEditandoId = null;
+
+  async function cargarListaCompras() {
+    const resp = await llamarAPI('getListaCompras');
+    if (resp.ok) {
+      listaComprasCache = resp.datos || [];
+      renderizarListaCompras();
+    }
+  }
+
+  function renderizarListaCompras() {
+    const lista = document.getElementById('lista-compras-items');
+    lista.innerHTML = '';
+    if (listaComprasCache.length === 0) {
+      lista.innerHTML = '<li class="vacio">Aún no hay productos en la lista</li>';
+      return;
+    }
+
+    // Pendientes primero, comprados al final
+    const ordenados = listaComprasCache.slice().sort((a, b) => {
+      const aComprado = a['Comprado'] === 'Si' ? 1 : 0;
+      const bComprado = b['Comprado'] === 'Si' ? 1 : 0;
+      return aComprado - bComprado;
+    });
+
+    ordenados.forEach(item => {
+      const comprado = item['Comprado'] === 'Si';
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info" style="display:flex; align-items:center; gap:10px;">
+          <input type="checkbox" ${comprado ? 'checked' : ''} style="width:auto;"
+            onchange="marcarComprado('${item['ID']}', this.checked)">
+          <div>
+            <div class="categoria" style="${comprado ? 'text-decoration:line-through; color:var(--texto-secundario);' : ''}">
+              ${item['Producto']} ${item['Cantidad'] ? '× ' + item['Cantidad'] : ''}
+            </div>
+            <div class="detalle">${item['Categoria'] || ''} ${item['Agregado por'] ? '· agregado por ' + item['Agregado por'] : ''}</div>
+          </div>
+        </div>
+        <button type="button" class="secundario" onclick="eliminarProductoLista('${item['ID']}')">Eliminar</button>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  async function marcarComprado(id, comprado) {
+    try {
+      const resp = await llamarAPI('toggleCompradoLista', { id: id, comprado: comprado });
+      if (resp.ok) {
+        await cargarListaCompras();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo actualizar: ' + err.message, 'error');
+    }
+  }
+
+  async function eliminarProductoLista(id) {
+    if (!confirm('¿Eliminar este producto de la lista?')) return;
+    try {
+      const resp = await llamarAPI('deleteProductoLista', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Producto eliminado', 'ok');
+        await cargarListaCompras();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  function cancelarEdicionProductoLista() {
+    productoListaEditandoId = null;
+    document.getElementById('form-lista-compras').reset();
+    document.getElementById('lista-campo-id').value = '';
+    document.getElementById('lista-btn-guardar').textContent = 'Agregar producto';
+    document.getElementById('lista-btn-cancelar').style.display = 'none';
+  }
+
+  async function guardarProductoLista(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('lista-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      producto: document.getElementById('lista-campo-producto').value.trim(),
+      cantidad: parseInt(document.getElementById('lista-campo-cantidad').value, 10) || 1,
+      categoria: document.getElementById('lista-campo-categoria').value.trim()
+    };
+
+    try {
+      let resp;
+      if (productoListaEditandoId) {
+        payload.id = productoListaEditandoId;
+        resp = await llamarAPI('updateProductoLista', payload);
+      } else {
+        resp = await llamarAPI('addProductoLista', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(productoListaEditandoId ? 'Producto actualizado' : 'Producto agregado', 'ok');
+        cancelarEdicionProductoLista();
+        await cargarListaCompras();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
+  }
+
+  // ---------- Usuarios ----------
+  let usuariosCache = [];
+  let usuarioEditandoEmail = null;
+
+  async function cargarUsuarios() {
+    const resp = await llamarAPI('getUsuarios');
+    if (resp.ok) {
+      usuariosCache = resp.datos || [];
+      renderizarUsuarios();
+    }
+  }
+
+  function renderizarUsuarios() {
+    const lista = document.getElementById('lista-usuarios');
+    lista.innerHTML = '';
+    if (usuariosCache.length === 0) {
+      lista.innerHTML = '<li class="vacio">No hay usuarios registrados</li>';
+      return;
+    }
+    usuariosCache.forEach(u => {
+      const ultimaSesion = u['Ultima sesion'] ? new Date(u['Ultima sesion']).toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : 'Nunca';
+      const li = document.createElement('li');
+      const esYo = u['Email (login)'] === miEmail;
+      let botones = '';
+      if (miRol === 'Admin') {
+        botones = `
+          <button type="button" class="secundario" onclick="editarUsuario('${u['Email (login)']}')">Editar</button>
+          ${esYo ? '' : `<button type="button" class="secundario" onclick="eliminarUsuario('${u['Email (login)']}')">Quitar</button>`}
+        `;
+      }
+      li.innerHTML = `
+        <div class="item-info">
+          <div class="categoria">${u['Nombre']}${esYo ? ' (tú)' : ''} <span class="rol" style="margin-left:6px;">${u['Rol (Admin/Miembro)']}</span></div>
+          <div class="detalle">${u['Email (login)']} · última sesión: ${ultimaSesion}</div>
+        </div>
+        <div style="display:flex; gap:6px;">${botones}</div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  function editarUsuario(email) {
+    const u = usuariosCache.find(x => x['Email (login)'] === email);
+    if (!u) return;
+    usuarioEditandoEmail = email;
+    document.getElementById('usuario-campo-email-original').value = email;
+    document.getElementById('usuario-campo-email').value = email;
+    document.getElementById('usuario-campo-email').disabled = true;
+    document.getElementById('usuario-campo-nombre').value = u['Nombre'];
+    document.getElementById('usuario-campo-rol').value = u['Rol (Admin/Miembro)'];
+    document.getElementById('usuario-campo-notif').value = u['Email de notificaciones'] || '';
+    document.getElementById('usuario-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('usuario-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-usuario').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionUsuario() {
+    usuarioEditandoEmail = null;
+    document.getElementById('form-usuario').reset();
+    document.getElementById('usuario-campo-email').disabled = false;
+    document.getElementById('usuario-btn-guardar').textContent = 'Agregar usuario';
+    document.getElementById('usuario-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarUsuario(email) {
+    if (!confirm('¿Quitar el acceso de ' + email + '? Ya no podrá iniciar sesión en la app.')) return;
+    try {
+      const resp = await llamarAPI('deleteUsuario', { email: email });
+      if (resp.ok) {
+        mostrarMensaje('Usuario eliminado', 'ok');
+        await cargarUsuarios();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarUsuario(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('usuario-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      email: document.getElementById('usuario-campo-email').value.trim(),
+      nombre: document.getElementById('usuario-campo-nombre').value.trim(),
+      rol: document.getElementById('usuario-campo-rol').value,
+      emailNotificaciones: document.getElementById('usuario-campo-notif').value.trim()
+    };
+
+    try {
+      let resp;
+      if (usuarioEditandoEmail) {
+        resp = await llamarAPI('updateUsuario', payload);
+      } else {
+        resp = await llamarAPI('addUsuario', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(usuarioEditandoEmail ? 'Usuario actualizado' : 'Usuario agregado — ya puede iniciar sesión', 'ok');
+        cancelarEdicionUsuario();
+        await cargarUsuarios();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
   }
 
   function cerrarSesion() {
