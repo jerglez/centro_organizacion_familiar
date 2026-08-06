@@ -663,6 +663,10 @@
         <label for="cat-campo-icono">Ícono (opcional)</label>
         <input type="text" id="cat-campo-icono" maxlength="4" placeholder="🛒">
       </div>
+      <div class="campo-ancho">
+        <label for="cat-campo-palabras">Palabras clave para reconocer facturas (opcional)</label>
+        <input type="text" id="cat-campo-palabras" placeholder="Ej. supermercado, colmado, mercado">
+      </div>
 
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="cat-btn-guardar" style="flex:1;">Agregar categoría</button>
@@ -867,7 +871,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "6.0";
+  const VERSION_APP = "6.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1065,6 +1069,7 @@
     document.getElementById('cat-campo-id').value = id;
     document.getElementById('cat-campo-nombre').value = cat['Nombre'];
     document.getElementById('cat-campo-icono').value = cat['Icono'] || '';
+    document.getElementById('cat-campo-palabras').value = cat['Palabras clave'] || '';
     elegirTipoCategoria(cat['Tipo (ingreso/gasto)']);
     document.getElementById('cat-btn-guardar').textContent = 'Guardar cambios';
     document.getElementById('cat-btn-cancelar').style.display = 'inline-block';
@@ -1104,7 +1109,8 @@
     const payload = {
       nombre: document.getElementById('cat-campo-nombre').value.trim(),
       tipo: tipoCategoriaSeleccionado,
-      icono: document.getElementById('cat-campo-icono').value.trim()
+      icono: document.getElementById('cat-campo-icono').value.trim(),
+      palabrasClave: document.getElementById('cat-campo-palabras').value.trim()
     };
 
     try {
@@ -2089,6 +2095,29 @@
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
 
+  // Busca, entre las categorias de gasto que el usuario ya creo, cual tiene una
+  // palabra clave que aparece en el comercio o en el texto de la factura.
+  // No inventa categorias nuevas ni usa una lista fija: solo compara contra lo
+  // que el propio usuario configuro en el campo "Palabras clave" de Categorias.
+  function sugerirCategoriaPorPalabrasClave(comercio, textoCompleto) {
+    const textoBusqueda = ((comercio || '') + ' ' + (textoCompleto || '')).toLowerCase();
+    const categoriasGasto = categoriasCache.filter(c => c['Tipo (ingreso/gasto)'] === 'gasto');
+
+    for (const cat of categoriasGasto) {
+      const palabras = (cat['Palabras clave'] || '')
+        .split(',')
+        .map(p => p.trim().toLowerCase())
+        .filter(Boolean);
+
+      for (const palabra of palabras) {
+        if (textoBusqueda.includes(palabra)) {
+          return cat['Nombre'];
+        }
+      }
+    }
+    return null;
+  }
+
   async function procesarArchivoFactura(inputEl) {
     const archivo = inputEl.files[0];
     if (!archivo) return;
@@ -2124,11 +2153,20 @@
         if (fechaConvertida) document.getElementById('campo-fecha').value = fechaConvertida;
       }
 
+      const categoriaSugerida = sugerirCategoriaPorPalabrasClave(resp.datos.comercio, resp.datos.textoCompleto);
+      if (categoriaSugerida) {
+        document.getElementById('campo-categoria').value = categoriaSugerida;
+      }
+
       origenTransaccionPendiente = 'ocr';
       estadoEl.className = 'ok';
-      estadoEl.textContent = (resp.datos.monto || resp.datos.comercio)
-        ? 'Factura leída. Revisa los datos detectados abajo y confirma antes de guardar.'
-        : 'Se leyó la factura pero no se detectó monto ni comercio con certeza — complétalos manualmente.';
+      if (categoriaSugerida) {
+        estadoEl.textContent = 'Factura leída. Categoría sugerida: "' + categoriaSugerida + '". Revisa y confirma antes de guardar.';
+      } else if (resp.datos.monto || resp.datos.comercio) {
+        estadoEl.textContent = 'Factura leída. Revisa los datos detectados abajo y confirma antes de guardar.';
+      } else {
+        estadoEl.textContent = 'Se leyó la factura pero no se detectó monto ni comercio con certeza — complétalos manualmente.';
+      }
 
       document.getElementById('form-transaccion').scrollIntoView({ behavior: 'smooth' });
     } catch (err) {
