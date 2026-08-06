@@ -359,6 +359,17 @@
   }
   #mensaje-estado.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
   #mensaje-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
+
+  #ocr-estado {
+    font-size: 0.82rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: none;
+  }
+  #ocr-estado.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
+  #ocr-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
+  #ocr-estado.cargando { display: block; color: var(--teal); background: var(--teal-claro); }
   .vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
 
   /* ---------- Filtro de movimientos ---------- */
@@ -576,6 +587,14 @@
   <div class="panel" id="panel-finanzas">
   <section class="bloque">
     <h3>Registrar movimiento</h3>
+
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.9rem;">
+      <button type="button" class="secundario" style="flex:1;" onclick="document.getElementById('input-camara').click()">📷 Tomar foto</button>
+      <button type="button" class="secundario" style="flex:1;" onclick="document.getElementById('input-adjuntar').click()">📎 Adjuntar imagen/PDF</button>
+    </div>
+    <input type="file" id="input-camara" accept="image/*" capture="environment" style="display:none;" onchange="procesarArchivoFactura(this)">
+    <input type="file" id="input-adjuntar" accept="image/*,application/pdf" style="display:none;" onchange="procesarArchivoFactura(this)">
+    <div id="ocr-estado"></div>
     <form id="form-transaccion" onsubmit="return agregarTransaccion(event)">
       <div class="campo-ancho tipo-toggle">
         <button type="button" id="btn-ingreso" class="activo ingreso" onclick="elegirTipo('ingreso')">Ingreso</button>
@@ -848,7 +867,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "5.6";
+  const VERSION_APP = "6.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -865,6 +884,7 @@
   let transaccionesCache = [];
   let transferenciasCache = [];
   let tipoSeleccionado = "ingreso";
+  let origenTransaccionPendiente = "manual";
   let intervaloSincronizacion = null;
 
   function manejarLogin(response) {
@@ -2047,6 +2067,78 @@
     });
   }
 
+  // ---------- Camara / adjuntar factura (OCR) ----------
+  function archivoABase64(archivo) {
+    return new Promise((resolve, reject) => {
+      const lector = new FileReader();
+      lector.onload = () => resolve(lector.result.split(',')[1]);
+      lector.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  // Convierte una fecha detectada tipo dd/mm/yyyy a formato yyyy-mm-dd para el input date.
+  // Devuelve null si no logra interpretarla con confianza (mejor dejar el campo vacio que mal).
+  function convertirFechaDetectada(fechaTexto) {
+    const partes = fechaTexto.split(/[\/\-]/);
+    if (partes.length !== 3) return null;
+    let [d, m, y] = partes;
+    if (y.length === 2) y = '20' + y;
+    const dNum = parseInt(d, 10), mNum = parseInt(m, 10);
+    if (isNaN(dNum) || isNaN(mNum) || dNum > 31 || mNum > 12) return null;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+
+  async function procesarArchivoFactura(inputEl) {
+    const archivo = inputEl.files[0];
+    if (!archivo) return;
+
+    const estadoEl = document.getElementById('ocr-estado');
+    estadoEl.className = 'cargando';
+    estadoEl.textContent = 'Leyendo la factura, esto puede tardar unos segundos...';
+
+    try {
+      const base64 = await archivoABase64(archivo);
+      const resp = await llamarAPI('procesarFacturaOCR', {
+        archivoBase64: base64,
+        nombreArchivo: archivo.name,
+        mimeType: archivo.type
+      });
+
+      if (!resp.ok) {
+        estadoEl.className = 'error';
+        estadoEl.textContent = 'No se pudo leer la factura: ' + resp.error;
+        return;
+      }
+
+      elegirTipo('gasto');
+      if (resp.datos.monto) {
+        document.getElementById('campo-monto').value = resp.datos.monto;
+      }
+      if (resp.datos.comercio) {
+        document.getElementById('campo-comercio').value = resp.datos.comercio;
+        document.getElementById('campo-descripcion').value = resp.datos.comercio;
+      }
+      if (resp.datos.fecha) {
+        const fechaConvertida = convertirFechaDetectada(resp.datos.fecha);
+        if (fechaConvertida) document.getElementById('campo-fecha').value = fechaConvertida;
+      }
+
+      origenTransaccionPendiente = 'ocr';
+      estadoEl.className = 'ok';
+      estadoEl.textContent = (resp.datos.monto || resp.datos.comercio)
+        ? 'Factura leída. Revisa los datos detectados abajo y confirma antes de guardar.'
+        : 'Se leyó la factura pero no se detectó monto ni comercio con certeza — complétalos manualmente.';
+
+      document.getElementById('form-transaccion').scrollIntoView({ behavior: 'smooth' });
+    } catch (err) {
+      estadoEl.className = 'error';
+      estadoEl.textContent = 'Error al procesar la factura: ' + err.message;
+    } finally {
+      inputEl.value = ''; // permite volver a elegir el mismo archivo despues
+    }
+  }
+
   async function agregarTransaccion(evento) {
     evento.preventDefault();
     const boton = document.getElementById('btn-guardar');
@@ -2061,7 +2153,7 @@
       fecha: document.getElementById('campo-fecha').value, // si esta vacio, el backend usa la fecha de hoy
       descripcion: document.getElementById('campo-descripcion').value,
       comercio: document.getElementById('campo-comercio').value,
-      fuente: 'manual'
+      fuente: origenTransaccionPendiente
     };
 
     try {
@@ -2069,6 +2161,9 @@
       if (resp.ok) {
         mostrarMensaje('Movimiento guardado correctamente', 'ok');
         document.getElementById('form-transaccion').reset();
+        origenTransaccionPendiente = 'manual';
+        document.getElementById('ocr-estado').className = '';
+        document.getElementById('ocr-estado').textContent = '';
         elegirTipo('ingreso');
         await cargarTransacciones();
         actualizarUltimaSincronizacion();
