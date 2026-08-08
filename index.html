@@ -235,6 +235,8 @@
     overflow-wrap: anywhere;
     line-height: 1.2;
   }
+  .tarjeta-filtro.activa { outline: 2px solid var(--teal); }
+
   .resumen .tarjeta.saldo span.valor {
     font-family: 'Fraunces', serif;
     font-weight: 600;
@@ -565,6 +567,7 @@
   <div id="mensaje-estado"></div>
 
   <div class="panel activo" id="panel-dashboard">
+  <button type="button" class="guardar" style="width:100%; margin-bottom:1rem; background:var(--coral);" onclick="irARegistrarGasto()">+ Registrar gasto rápido</button>
   <div class="resumen">
     <div class="tarjeta saldo">
       <span class="label">Saldo total</span>
@@ -630,7 +633,8 @@
       </div>
       <div>
         <label for="campo-cuenta">Cuenta</label>
-        <select id="campo-cuenta" required></select>
+        <select id="campo-cuenta" required onchange="actualizarSaldoCuentaFinanzas()"></select>
+        <div class="texto-sync" id="campo-cuenta-saldo" style="margin-top:4px;"></div>
       </div>
       <div>
         <label for="campo-fecha">Fecha (opcional)</label>
@@ -700,23 +704,24 @@
 
   <div class="panel" id="panel-cuentas">
   <div class="resumen">
-    <div class="tarjeta ingresos">
+    <div class="tarjeta ingresos tarjeta-filtro" data-tipo-cuenta="Ahorro" onclick="filtrarCuentasPorTipo('Ahorro')" style="cursor:pointer;">
       <span class="label">Total Ahorros</span>
       <span class="valor" id="valor-total-ahorro">RD$0</span>
     </div>
-    <div class="tarjeta ingresos">
+    <div class="tarjeta ingresos tarjeta-filtro" data-tipo-cuenta="Debito" onclick="filtrarCuentasPorTipo('Debito')" style="cursor:pointer;">
       <span class="label">Total Débito</span>
       <span class="valor" id="valor-total-debito">RD$0</span>
     </div>
-    <div class="tarjeta gastos">
+    <div class="tarjeta gastos tarjeta-filtro" data-tipo-cuenta="Tarjeta de credito" onclick="filtrarCuentasPorTipo('Tarjeta de credito')" style="cursor:pointer;">
       <span class="label">Deudas en Tarjetas</span>
       <span class="valor" id="valor-total-deuda-tarjetas">RD$0</span>
     </div>
-    <div class="tarjeta ingresos">
+    <div class="tarjeta ingresos tarjeta-filtro" data-tipo-cuenta="Inversion" onclick="filtrarCuentasPorTipo('Inversion')" style="cursor:pointer;">
       <span class="label">Inversiones</span>
       <span class="valor" id="valor-total-inversion">RD$0</span>
     </div>
   </div>
+  <p class="vacio" style="text-align:left; margin:0.4rem 0 0;">Toca un cuadro para filtrar la lista por ese tipo. Toca de nuevo para quitar el filtro.</p>
 
   <section class="bloque">
     <h3>Cuentas</h3>
@@ -831,6 +836,17 @@
   <div class="panel" id="panel-prestamos">
   <section class="bloque">
     <h3>Préstamos</h3>
+
+    <ul id="lista-prestamos" style="margin-bottom:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;"
+      onclick="cancelarEdicionPrestamo(); document.getElementById('prestamo-form-contenedor').style.display='block'; document.getElementById('form-prestamo').scrollIntoView({behavior:'smooth'});">
+      + Nuevo préstamo
+    </button>
+
+    <div id="prestamo-form-contenedor" style="display:none;">
     <form id="form-prestamo" onsubmit="return guardarPrestamo(event)">
       <input type="hidden" id="prestamo-campo-id" value="">
       <div class="campo-ancho">
@@ -870,13 +886,11 @@
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="prestamo-btn-guardar" style="flex:1;">Agregar préstamo</button>
         <button type="button" class="guardar" id="prestamo-btn-aplicar-pago" onclick="aplicarPagoPrestamo()" style="flex:1; display:none; background:var(--verde);">Aplicar pago</button>
-        <button type="button" class="secundario" id="prestamo-btn-cancelar" onclick="cancelarEdicionPrestamo()" style="display:none;">Cancelar</button>
+        <button type="button" class="secundario" id="prestamo-btn-cancelar"
+          onclick="cancelarEdicionPrestamo(); document.getElementById('prestamo-form-contenedor').style.display='none';">Cancelar</button>
       </div>
     </form>
-
-    <ul id="lista-prestamos" style="margin-top:1rem;">
-      <li class="vacio">Cargando...</li>
-    </ul>
+    </div>
   </section>
   </div>
 
@@ -897,11 +911,22 @@
         <label for="lista-campo-categoria">Categoría (opcional)</label>
         <input type="text" id="lista-campo-categoria" placeholder="Ej. Víveres">
       </div>
+      <div>
+        <label for="lista-campo-precio">Precio estimado por unidad (RD$, opcional)</label>
+        <input type="number" id="lista-campo-precio" step="0.01" min="0" placeholder="Ej. 250">
+      </div>
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="lista-btn-guardar" style="flex:1;">Agregar producto</button>
         <button type="button" class="secundario" id="lista-btn-cancelar" onclick="cancelarEdicionProductoLista()" style="display:none;">Cancelar</button>
       </div>
     </form>
+
+    <div class="resumen" style="margin-top:1rem;">
+      <div class="tarjeta gastos">
+        <span class="label">Total estimado (pendientes)</span>
+        <span class="valor" id="valor-total-estimado-lista">RD$0</span>
+      </div>
+    </div>
 
     <ul id="lista-compras-items" style="margin-top:1rem;">
       <li class="vacio">Cargando...</li>
@@ -955,7 +980,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "7.0";
+  const VERSION_APP = "8.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1250,7 +1275,7 @@
 
   function poblarSelectsCuentas() {
     const activas = cuentasCache.filter(c => c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí');
-    const soloOrigenValido = activas.filter(c => c['Tipo'] === 'Ahorro' || c['Tipo'] === 'Debito' || c['Tipo'] === 'Inversion');
+    const soloOrigenValido = activas.filter(c => c['Tipo'] === 'Ahorro' || c['Tipo'] === 'Debito' || c['Tipo'] === 'Inversion' || c['Tipo'] === 'Efectivo');
 
     poblarSelectCuentaFinanzas();
     poblarUnSelectDeCuentas(document.getElementById('transf-origen'), soloOrigenValido);
@@ -1270,6 +1295,12 @@
       : ['Ahorro', 'Debito', 'Efectivo', 'Tarjeta de credito'];
     const permitidas = activas.filter(c => tiposPermitidos.includes(c['Tipo']));
     poblarUnSelectDeCuentas(document.getElementById('campo-cuenta'), permitidas);
+    actualizarSaldoCuentaFinanzas();
+  }
+
+  function actualizarSaldoCuentaFinanzas() {
+    const cuenta = document.getElementById('campo-cuenta').value;
+    document.getElementById('campo-cuenta-saldo').textContent = cuenta ? textoSaldoCuenta(cuenta) : '';
   }
 
   function poblarUnSelectDeCuentas(select, lista) {
@@ -1341,6 +1372,16 @@
     campoMonto.value = monto.toFixed(2);
   }
 
+  let filtroTipoCuenta = 'todos';
+
+  function filtrarCuentasPorTipo(tipo) {
+    filtroTipoCuenta = (filtroTipoCuenta === tipo) ? 'todos' : tipo; // clic de nuevo = quitar filtro
+    document.querySelectorAll('.tarjeta-filtro').forEach(t => {
+      t.classList.toggle('activa', t.dataset.tipoCuenta === filtroTipoCuenta);
+    });
+    renderizarCuentas();
+  }
+
   function renderizarResumenCuentas() {
     let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0, totalInversion = 0;
     cuentasCache.forEach(c => {
@@ -1364,43 +1405,77 @@
       lista.innerHTML = '<li class="vacio">Aún no has creado ninguna cuenta</li>';
       return;
     }
-    cuentasCache.forEach(cuenta => {
+
+    const filtradas = filtroTipoCuenta === 'todos'
+      ? cuentasCache.slice()
+      : cuentasCache.filter(c => c['Tipo'] === filtroTipoCuenta);
+
+    if (filtradas.length === 0) {
+      lista.innerHTML = '<li class="vacio">No tienes cuentas de este tipo</li>';
+      return;
+    }
+
+    // Ordenar de mayor a menor saldo (las deudas de tarjeta se comparan por lo que se debe)
+    const ordenadas = filtradas.sort((a, b) => calcularSaldoCuenta(b['Nombre']) - calcularSaldoCuenta(a['Nombre']));
+
+    ordenadas.forEach(cuenta => {
       const saldo = calcularSaldoCuenta(cuenta['Nombre']);
       const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
       const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
       const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
 
       let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
-      if (cuenta['Tipo'] === 'Tarjeta de credito') {
-        const limite = parseFloat(cuenta['Limite de credito']) || 0;
-        if (limite > 0) {
-          const disponible = Math.max(0, limite - saldo);
-          detalleExtra += ` · Disponible RD$${disponible.toLocaleString('es-DO', {minimumFractionDigits:2})}`;
-        }
-        if (cuenta['Fecha de corte']) detalleExtra += ` · Corte día ${cuenta['Fecha de corte']}`;
-      }
       if (cuenta['Tipo'] === 'Inversion') {
         const aportado = calcularAportadoInversion(cuenta['Nombre']);
         const ganancia = calcularGananciaInversion(cuenta['Nombre']);
         const pctGanancia = aportado > 0 ? (ganancia / aportado * 100) : 0;
-        detalleExtra += ` · Aportado RD$${aportado.toLocaleString('es-DO', {minimumFractionDigits:2})}` +
-          ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
+        detalleExtra += ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
+      }
+
+      // Detalle completo, visible solo al hacer clic en la cuenta
+      let detalleCompleto = `Institución: ${cuenta['Institucion'] || 'No especificada'}<br>Saldo inicial: RD$${(parseFloat(cuenta['Saldo inicial']) || 0).toLocaleString('es-DO', {minimumFractionDigits:2})}`;
+      if (cuenta['Tipo'] === 'Tarjeta de credito') {
+        const limite = parseFloat(cuenta['Limite de credito']) || 0;
+        const disponible = Math.max(0, limite - saldo);
+        detalleCompleto += `<br>Límite de crédito: RD$${limite.toLocaleString('es-DO', {minimumFractionDigits:2})}` +
+          `<br>Disponible: RD$${disponible.toLocaleString('es-DO', {minimumFractionDigits:2})}` +
+          `<br>Balance al corte: RD$${(parseFloat(cuenta['Balance al corte']) || 0).toLocaleString('es-DO', {minimumFractionDigits:2})}` +
+          `<br>Día de corte: ${cuenta['Fecha de corte'] || 'No definido'}` +
+          `<br>Fecha límite de pago: ${cuenta['Fecha limite de pago'] ? new Date(cuenta['Fecha limite de pago']).toLocaleDateString('es-DO') : 'No definida'}` +
+          `<br>Tasa de interés anual: ${cuenta['Tasa de interes anual'] ? cuenta['Tasa de interes anual'] + '%' : 'No definida'}`;
+      }
+      if (cuenta['Tipo'] === 'Inversion') {
+        detalleCompleto += `<br>Tasa de rendimiento: ${cuenta['Tasa de interes anual'] ? cuenta['Tasa de interes anual'] + '%' : 'No definida'}` +
+          `<br>Aportado: RD$${calcularAportadoInversion(cuenta['Nombre']).toLocaleString('es-DO', {minimumFractionDigits:2})}` +
+          `<br>Ganancia: RD$${calcularGananciaInversion(cuenta['Nombre']).toLocaleString('es-DO', {minimumFractionDigits:2})}`;
       }
 
       const li = document.createElement('li');
+      li.style.display = 'block';
       li.innerHTML = `
-        <div class="item-info">
-          <div class="categoria">${cuenta['Nombre']}</div>
-          <div class="detalle">${detalleExtra}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="item-info" style="cursor:pointer;" onclick="toggleDetalleCuenta('${cuenta['ID']}')" title="Clic para ver más detalles">
+            <div class="categoria">${cuenta['Nombre']}</div>
+            <div class="detalle">${detalleExtra}</div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+            <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
+            <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
+          </div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
-          <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
-          <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
+        <div id="detalle-cuenta-${cuenta['ID']}" class="detalle" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--borde); line-height:1.6;">
+          ${detalleCompleto}
         </div>
       `;
       lista.appendChild(li);
     });
+  }
+
+  function toggleDetalleCuenta(id) {
+    const cont = document.getElementById('detalle-cuenta-' + id);
+    if (!cont) return;
+    cont.style.display = cont.style.display === 'block' ? 'none' : 'block';
   }
 
   // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
@@ -1764,6 +1839,7 @@
     document.getElementById('prestamo-btn-guardar').textContent = 'Guardar cambios';
     document.getElementById('prestamo-btn-guardar').style.display = 'inline-block';
     document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('prestamo-form-contenedor').style.display = 'block';
     document.getElementById('form-prestamo').scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -1795,6 +1871,7 @@
     document.getElementById('prestamo-btn-cancelar').style.display = 'inline-block';
     document.getElementById('campo-adelanto-pago').style.display = 'block';
     document.getElementById('prestamo-campo-adelanto').checked = false;
+    document.getElementById('prestamo-form-contenedor').style.display = 'block';
     document.getElementById('form-prestamo').scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -2001,9 +2078,10 @@
       li.className = tipo;
       const fecha = fechaTransaccion ? fechaTransaccion.toLocaleDateString('es-DO') : '';
       li.innerHTML = `
-        <div class="item-info">
+        <div class="item-info" style="cursor:pointer;" onclick="toggleCuentaMovimiento('${t['ID']}')" title="Clic para ver la cuenta">
           <div class="categoria">${t['Categoria'] || 'Sin categoría'}</div>
           <div class="detalle">${t['Descripcion'] || t['Comercio'] || ''} ${fecha ? '· ' + fecha : ''}</div>
+          <div class="detalle" id="cuenta-mov-${t['ID']}" style="display:none; color:var(--teal);">Cuenta: ${t['Cuenta'] || 'Sin especificar'}</div>
         </div>
         <div class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
       `;
@@ -2013,6 +2091,12 @@
     if (mostrados === 0) {
       lista.innerHTML = '<li class="vacio">No hay movimientos en este período</li>';
     }
+  }
+
+  function toggleCuentaMovimiento(id) {
+    const cont = document.getElementById('cuenta-mov-' + id);
+    if (!cont) return;
+    cont.style.display = cont.style.display === 'block' ? 'none' : 'block';
   }
 
   // ---------- Dashboard: grafica de gastos por categoria ----------
@@ -2338,6 +2422,12 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function irARegistrarGasto() {
+    mostrarSeccion('finanzas');
+    elegirTipo('gasto');
+    setTimeout(() => document.getElementById('campo-monto').focus(), 150);
+  }
+
   // ---------- Lista de compras ----------
   let listaComprasCache = [];
   let productoListaEditandoId = null;
@@ -2353,6 +2443,18 @@
   function renderizarListaCompras() {
     const lista = document.getElementById('lista-compras-items');
     lista.innerHTML = '';
+
+    let totalEstimado = 0;
+    listaComprasCache.forEach(item => {
+      if (item['Comprado'] !== 'Si') {
+        const precio = parseFloat(item['Precio estimado']) || 0;
+        const cantidad = parseFloat(item['Cantidad']) || 1;
+        totalEstimado += precio * cantidad;
+      }
+    });
+    document.getElementById('valor-total-estimado-lista').textContent =
+      'RD$' + totalEstimado.toLocaleString('es-DO', { minimumFractionDigits: 2 });
+
     if (listaComprasCache.length === 0) {
       lista.innerHTML = '<li class="vacio">Aún no hay productos en la lista</li>';
       return;
@@ -2367,6 +2469,8 @@
 
     ordenados.forEach(item => {
       const comprado = item['Comprado'] === 'Si';
+      const precio = parseFloat(item['Precio estimado']) || 0;
+      const subtotal = precio * (parseFloat(item['Cantidad']) || 1);
       const li = document.createElement('li');
       li.innerHTML = `
         <div class="item-info" style="display:flex; align-items:center; gap:10px;">
@@ -2376,7 +2480,7 @@
             <div class="categoria" style="${comprado ? 'text-decoration:line-through; color:var(--texto-secundario);' : ''}">
               ${item['Producto']} ${item['Cantidad'] ? '× ' + item['Cantidad'] : ''}
             </div>
-            <div class="detalle">${item['Categoria'] || ''} ${item['Agregado por'] ? '· agregado por ' + item['Agregado por'] : ''}</div>
+            <div class="detalle">${item['Categoria'] || ''} ${item['Agregado por'] ? '· agregado por ' + item['Agregado por'] : ''}${precio ? ' · RD$' + subtotal.toLocaleString('es-DO', {minimumFractionDigits:2}) : ''}</div>
           </div>
         </div>
         <button type="button" class="secundario" onclick="eliminarProductoLista('${item['ID']}')">Eliminar</button>
@@ -2431,7 +2535,8 @@
     const payload = {
       producto: document.getElementById('lista-campo-producto').value.trim(),
       cantidad: parseInt(document.getElementById('lista-campo-cantidad').value, 10) || 1,
-      categoria: document.getElementById('lista-campo-categoria').value.trim()
+      categoria: document.getElementById('lista-campo-categoria').value.trim(),
+      precioEstimado: parseFloat(document.getElementById('lista-campo-precio').value) || ''
     };
 
     try {
