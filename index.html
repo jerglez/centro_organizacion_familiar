@@ -361,7 +361,7 @@
   #lista-ultimos-movimientos li:last-child,
   #lista-usuarios li:last-child,
   #lista-compras-items li:last-child { border-bottom: none; }
-  .item-info { min-width: 0; flex: 1; margin-right: 0.5rem; }
+  .item-info { min-width: 130px; flex: 1 1 130px; margin-right: 0.5rem; }
   .item-info .categoria { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
   .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); word-break: break-word; }
   .item-monto { font-weight: 700; font-size: 0.95rem; white-space: nowrap; }
@@ -385,9 +385,19 @@
     margin-bottom: 1rem;
     display: none;
   }
-  #ocr-estado.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
-  #ocr-estado.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
-  #ocr-estado.cargando { display: block; color: var(--teal); background: var(--teal-claro); }
+  #ocr-estado.error,
+  #ocr-estado-lista.error { display: block; color: var(--rojo); background: var(--rojo-fondo); }
+  #ocr-estado.ok,
+  #ocr-estado-lista.ok { display: block; color: var(--verde); background: var(--verde-fondo); }
+  #ocr-estado.cargando,
+  #ocr-estado-lista.cargando { display: block; color: var(--teal); background: var(--teal-claro); }
+  #ocr-estado-lista {
+    font-size: 0.82rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    display: none;
+  }
   .vacio { color: var(--texto-secundario); font-size: 0.85rem; text-align: center; padding: 1rem 0; }
 
   /* ---------- Filtro de movimientos ---------- */
@@ -897,6 +907,14 @@
   <div class="panel" id="panel-listacompras">
   <section class="bloque">
     <h3>Lista de compras</h3>
+
+    <div style="display:flex; gap:0.5rem; margin-bottom:0.9rem;">
+      <button type="button" class="secundario" style="flex:1;" onclick="document.getElementById('input-camara-lista').click()">📷 Escanear factura</button>
+      <button type="button" class="secundario" style="flex:1;" onclick="document.getElementById('input-adjuntar-lista').click()">📎 Adjuntar imagen/PDF</button>
+    </div>
+    <input type="file" id="input-camara-lista" accept="image/*" capture="environment" style="display:none;" onchange="procesarFacturaParaPrecios(this)">
+    <input type="file" id="input-adjuntar-lista" accept="image/*,application/pdf" style="display:none;" onchange="procesarFacturaParaPrecios(this)">
+    <div id="ocr-estado-lista"></div>
     <form id="form-lista-compras" onsubmit="return guardarProductoLista(event)">
       <input type="hidden" id="lista-campo-id" value="">
       <div class="campo-ancho">
@@ -980,7 +998,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "8.0";
+  const VERSION_APP = "8.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1432,29 +1450,11 @@
         detalleExtra += ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
       }
 
-      // Detalle completo, visible solo al hacer clic en la cuenta
-      let detalleCompleto = `Institución: ${cuenta['Institucion'] || 'No especificada'}<br>Saldo inicial: RD$${(parseFloat(cuenta['Saldo inicial']) || 0).toLocaleString('es-DO', {minimumFractionDigits:2})}`;
-      if (cuenta['Tipo'] === 'Tarjeta de credito') {
-        const limite = parseFloat(cuenta['Limite de credito']) || 0;
-        const disponible = Math.max(0, limite - saldo);
-        detalleCompleto += `<br>Límite de crédito: RD$${limite.toLocaleString('es-DO', {minimumFractionDigits:2})}` +
-          `<br>Disponible: RD$${disponible.toLocaleString('es-DO', {minimumFractionDigits:2})}` +
-          `<br>Balance al corte: RD$${(parseFloat(cuenta['Balance al corte']) || 0).toLocaleString('es-DO', {minimumFractionDigits:2})}` +
-          `<br>Día de corte: ${cuenta['Fecha de corte'] || 'No definido'}` +
-          `<br>Fecha límite de pago: ${cuenta['Fecha limite de pago'] ? new Date(cuenta['Fecha limite de pago']).toLocaleDateString('es-DO') : 'No definida'}` +
-          `<br>Tasa de interés anual: ${cuenta['Tasa de interes anual'] ? cuenta['Tasa de interes anual'] + '%' : 'No definida'}`;
-      }
-      if (cuenta['Tipo'] === 'Inversion') {
-        detalleCompleto += `<br>Tasa de rendimiento: ${cuenta['Tasa de interes anual'] ? cuenta['Tasa de interes anual'] + '%' : 'No definida'}` +
-          `<br>Aportado: RD$${calcularAportadoInversion(cuenta['Nombre']).toLocaleString('es-DO', {minimumFractionDigits:2})}` +
-          `<br>Ganancia: RD$${calcularGananciaInversion(cuenta['Nombre']).toLocaleString('es-DO', {minimumFractionDigits:2})}`;
-      }
-
       const li = document.createElement('li');
       li.style.display = 'block';
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div class="item-info" style="cursor:pointer;" onclick="toggleDetalleCuenta('${cuenta['ID']}')" title="Clic para ver más detalles">
+          <div class="item-info" style="cursor:pointer;" onclick="editarCuenta('${cuenta['ID']}')" title="Clic para ver y editar los datos">
             <div class="categoria">${cuenta['Nombre']}</div>
             <div class="detalle">${detalleExtra}</div>
           </div>
@@ -1464,18 +1464,9 @@
             <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
           </div>
         </div>
-        <div id="detalle-cuenta-${cuenta['ID']}" class="detalle" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--borde); line-height:1.6;">
-          ${detalleCompleto}
-        </div>
       `;
       lista.appendChild(li);
     });
-  }
-
-  function toggleDetalleCuenta(id) {
-    const cont = document.getElementById('detalle-cuenta-' + id);
-    if (!cont) return;
-    cont.style.display = cont.style.display === 'block' ? 'none' : 'block';
   }
 
   // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
@@ -2525,6 +2516,51 @@
     document.getElementById('lista-campo-id').value = '';
     document.getElementById('lista-btn-guardar').textContent = 'Agregar producto';
     document.getElementById('lista-btn-cancelar').style.display = 'none';
+  }
+
+  async function procesarFacturaParaPrecios(inputEl) {
+    const archivo = inputEl.files[0];
+    if (!archivo) return;
+
+    const estadoEl = document.getElementById('ocr-estado-lista');
+    estadoEl.className = 'cargando';
+    estadoEl.textContent = 'Leyendo la factura para actualizar precios...';
+
+    try {
+      const base64 = await archivoABase64(archivo);
+      const resp = await llamarAPI('actualizarPreciosListaDesdeFactura', {
+        archivoBase64: base64,
+        nombreArchivo: archivo.name,
+        mimeType: archivo.type
+      });
+
+      if (!resp.ok) {
+        estadoEl.className = 'error';
+        estadoEl.textContent = 'No se pudo leer la factura: ' + resp.error;
+        return;
+      }
+
+      await cargarListaCompras();
+      actualizarUltimaSincronizacion();
+
+      const { actualizados, noEncontrados } = resp.datos;
+      if (actualizados.length === 0) {
+        estadoEl.className = 'error';
+        estadoEl.textContent = 'No se encontró en la factura ningún producto que esté en tu lista pendiente.';
+      } else {
+        const detalle = actualizados
+          .map(a => a.producto + ' (RD$' + a.precio.toLocaleString('es-DO', { minimumFractionDigits: 2 }) + ')')
+          .join(', ');
+        estadoEl.className = 'ok';
+        estadoEl.textContent = 'Precios actualizados: ' + detalle +
+          (noEncontrados.length > 0 ? '. Otros productos en la factura no coincidían con tu lista.' : '');
+      }
+    } catch (err) {
+      estadoEl.className = 'error';
+      estadoEl.textContent = 'Error al procesar la factura: ' + err.message;
+    } finally {
+      inputEl.value = '';
+    }
   }
 
   async function guardarProductoLista(evento) {
