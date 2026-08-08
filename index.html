@@ -203,6 +203,85 @@
     color: var(--texto-secundario);
     white-space: nowrap;
   }
+
+  /* ---------- Campana de novedades ---------- */
+  .btn-editar-mov {
+    background: none;
+    border: none;
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  .btn-campana {
+    position: relative;
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #badge-notificaciones {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--coral);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    border-radius: 999px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #panel-notificaciones {
+    position: absolute;
+    top: 42px;
+    right: 0;
+    width: 300px;
+    max-width: 85vw;
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    z-index: 60;
+  }
+  .notif-grupo {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--texto-secundario);
+    padding: 0.6rem 0.8rem 0.2rem;
+  }
+  .notif-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--borde);
+    font-size: 0.8rem;
+  }
+  .notif-item .notif-texto { flex: 1; }
+  .notif-item .notif-hora { font-size: 0.68rem; color: var(--texto-secundario); }
+  .notif-item button {
+    background: none;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    flex-shrink: 0;
+    color: var(--verde);
+  }
   button.secundario {
     background: none;
     border: 1px solid var(--borde);
@@ -518,6 +597,19 @@
     </div>
     <div class="acciones-header">
       <span id="ultima-sync" class="texto-sync"></span>
+      <div style="position:relative;">
+        <button class="btn-campana" onclick="toggleCampanaNotificaciones()" aria-label="Novedades">
+          🔔
+          <span id="badge-notificaciones" style="display:none;">0</span>
+        </button>
+        <div id="panel-notificaciones" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:0.6rem 0.8rem; border-bottom:1px solid var(--borde);">
+            <strong style="font-size:0.85rem;">Novedades</strong>
+            <button type="button" class="secundario" style="font-size:0.72rem; padding:3px 8px;" onclick="reconocerTodasNotificaciones()">Reconocer todas</button>
+          </div>
+          <div id="lista-notificaciones" style="max-height:320px; overflow-y:auto;"></div>
+        </div>
+      </div>
       <button class="secundario" onclick="cerrarSesion()">Cerrar sesión</button>
     </div>
   </header>
@@ -659,7 +751,10 @@
         <input type="text" id="campo-comercio" placeholder="Ej. Supermercado Nacional">
       </div>
 
-      <button type="submit" class="guardar" id="btn-guardar">Guardar</button>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="btn-guardar" style="flex:1;">Guardar</button>
+        <button type="button" class="secundario" id="btn-cancelar-transaccion" onclick="cancelarEdicionTransaccion()" style="display:none;">Cancelar</button>
+      </div>
     </form>
   </section>
 
@@ -999,7 +1094,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "8.2";
+  const VERSION_APP = "9.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1017,8 +1112,11 @@
   let transferenciasCache = [];
   let tipoSeleccionado = "ingreso";
   let origenTransaccionPendiente = "manual";
+  let transaccionEditandoId = null;
   let miEmail = '';
   let miRol = '';
+  let notificacionesCache = [];
+  let notificacionesDescartadasLocal = new Set(); // "reconocidas" en esta sesion, sin cerrar el panel
   let intervaloSincronizacion = null;
 
   function manejarLogin(response) {
@@ -1104,6 +1202,7 @@
     await cargarPresupuestos();
     await cargarListaCompras();
     await cargarUsuarios();
+    await cargarNotificaciones();
     actualizarUltimaSincronizacion();
   }
 
@@ -2128,13 +2227,19 @@
       const li = document.createElement('li');
       li.className = tipo;
       const fecha = fechaTransaccion ? fechaTransaccion.toLocaleDateString('es-DO') : '';
+      const botonEditar = miRol === 'Admin'
+        ? `<button type="button" class="btn-editar-mov" onclick="editarTransaccion('${t['ID']}')" title="Editar este movimiento">📝</button>`
+        : '';
       li.innerHTML = `
         <div class="item-info" style="cursor:pointer;" onclick="toggleCuentaMovimiento('${t['ID']}')" title="Clic para ver la cuenta">
           <div class="categoria">${t['Categoria'] || 'Sin categoría'}</div>
           <div class="detalle">${t['Descripcion'] || t['Comercio'] || ''} ${fecha ? '· ' + fecha : ''}</div>
           <div class="detalle" id="cuenta-mov-${t['ID']}" style="display:none; color:var(--teal);">Cuenta: ${t['Cuenta'] || 'Sin especificar'}</div>
         </div>
-        <div class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
+          <div class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+          ${botonEditar}
+        </div>
       `;
       lista.appendChild(li);
     });
@@ -2414,7 +2519,7 @@
     evento.preventDefault();
     const boton = document.getElementById('btn-guardar');
     boton.disabled = true;
-    boton.textContent = 'Guardando...';
+    boton.textContent = transaccionEditandoId ? 'Guardando cambios...' : 'Guardando...';
 
     const payload = {
       tipo: tipoSeleccionado,
@@ -2428,14 +2533,19 @@
     };
 
     try {
-      const resp = await llamarAPI('addTransaccion', payload);
+      let resp;
+      if (transaccionEditandoId) {
+        payload.id = transaccionEditandoId;
+        resp = await llamarAPI('updateTransaccion', payload);
+      } else {
+        resp = await llamarAPI('addTransaccion', payload);
+      }
+
       if (resp.ok) {
-        mostrarMensaje('Movimiento guardado correctamente', 'ok');
-        document.getElementById('form-transaccion').reset();
-        origenTransaccionPendiente = 'manual';
+        mostrarMensaje(transaccionEditandoId ? 'Movimiento actualizado' : 'Movimiento guardado correctamente', 'ok');
+        cancelarEdicionTransaccion();
         document.getElementById('ocr-estado').className = '';
         document.getElementById('ocr-estado').textContent = '';
-        elegirTipo('ingreso');
         await cargarTransacciones();
         actualizarUltimaSincronizacion();
       } else {
@@ -2445,9 +2555,38 @@
       mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
     } finally {
       boton.disabled = false;
-      boton.textContent = 'Guardar';
+      boton.textContent = transaccionEditandoId ? 'Guardar cambios' : 'Guardar';
     }
     return false;
+  }
+
+  // Carga un movimiento ya guardado en el formulario para editarlo (solo Admin).
+  function editarTransaccion(id) {
+    const t = transaccionesCache.find(x => String(x['ID']) === String(id));
+    if (!t) return;
+    transaccionEditandoId = id;
+
+    elegirTipo(t['Tipo (ingreso/gasto)']);
+    document.getElementById('campo-monto').value = t['Monto'] || '';
+    document.getElementById('campo-categoria').value = t['Categoria'] || '';
+    document.getElementById('campo-cuenta').value = t['Cuenta'] || '';
+    const fecha = t['Fecha'] ? new Date(t['Fecha']) : null;
+    document.getElementById('campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('campo-descripcion').value = t['Descripcion'] || '';
+    document.getElementById('campo-comercio').value = t['Comercio'] || '';
+
+    document.getElementById('btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('btn-cancelar-transaccion').style.display = 'inline-block';
+    document.getElementById('form-transaccion').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionTransaccion() {
+    transaccionEditandoId = null;
+    document.getElementById('form-transaccion').reset();
+    origenTransaccionPendiente = 'manual';
+    document.getElementById('btn-guardar').textContent = 'Guardar';
+    document.getElementById('btn-cancelar-transaccion').style.display = 'none';
+    elegirTipo('ingreso');
   }
 
   // ---------- Navegacion (menu lateral) ----------
@@ -2521,7 +2660,8 @@
     ordenados.forEach(item => {
       const comprado = item['Comprado'] === 'Si';
       const precio = parseFloat(item['Precio estimado']) || 0;
-      const subtotal = precio * (parseFloat(item['Cantidad']) || 1);
+      const cantidad = parseFloat(item['Cantidad']) || 1;
+      const subtotal = precio * cantidad;
       const li = document.createElement('li');
       li.innerHTML = `
         <div class="item-info" style="display:flex; align-items:center; gap:10px;">
@@ -2531,10 +2671,14 @@
             <div class="categoria" style="${comprado ? 'text-decoration:line-through; color:var(--texto-secundario);' : ''}">
               ${item['Producto']} ${item['Cantidad'] ? '× ' + item['Cantidad'] : ''}
             </div>
-            <div class="detalle">${item['Categoria'] || ''} ${item['Agregado por'] ? '· agregado por ' + item['Agregado por'] : ''}${precio ? ' · RD$' + subtotal.toLocaleString('es-DO', {minimumFractionDigits:2}) : ''}</div>
+            <div class="detalle">${item['Categoria'] || ''} ${item['Agregado por'] ? '· agregado por ' + item['Agregado por'] : ''}</div>
+            <div class="detalle">Precio estimado: RD$${precio.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
           </div>
         </div>
-        <button type="button" class="secundario" onclick="eliminarProductoLista('${item['ID']}')">Eliminar</button>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="item-monto cifra">RD$${subtotal.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <button type="button" class="secundario" onclick="eliminarProductoLista('${item['ID']}')">Eliminar</button>
+        </div>
       `;
       lista.appendChild(li);
     });
@@ -2788,6 +2932,91 @@
       boton.disabled = false;
     }
     return false;
+  }
+
+  // ---------- Campana de novedades ----------
+  async function cargarNotificaciones() {
+    const resp = await llamarAPI('getNotificaciones');
+    if (resp.ok) {
+      notificacionesCache = resp.datos || [];
+      renderizarNotificaciones();
+    }
+  }
+
+  function renderizarNotificaciones() {
+    const visibles = notificacionesCache.filter(n => !notificacionesDescartadasLocal.has(String(n['ID'])));
+    const badge = document.getElementById('badge-notificaciones');
+
+    if (visibles.length === 0) {
+      badge.style.display = 'none';
+    } else {
+      badge.style.display = 'flex';
+      badge.textContent = visibles.length > 9 ? '9+' : visibles.length;
+    }
+
+    const cont = document.getElementById('lista-notificaciones');
+    if (visibles.length === 0) {
+      cont.innerHTML = '<p class="vacio" style="padding:1rem;">No hay novedades nuevas</p>';
+      return;
+    }
+
+    // Agrupar por modulo, para "resaltar" que cambio en cada uno
+    const porModulo = {};
+    visibles.forEach(n => {
+      const mod = n['Modulo'] || 'Otro';
+      if (!porModulo[mod]) porModulo[mod] = [];
+      porModulo[mod].push(n);
+    });
+
+    cont.innerHTML = '';
+    Object.keys(porModulo).forEach(modulo => {
+      const grupo = document.createElement('div');
+      grupo.className = 'notif-grupo';
+      grupo.textContent = modulo + ' (' + porModulo[modulo].length + ')';
+      cont.appendChild(grupo);
+
+      porModulo[modulo].forEach(n => {
+        const hora = n['Fecha'] ? new Date(n['Fecha']).toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+        const item = document.createElement('div');
+        item.className = 'notif-item';
+        item.innerHTML = `
+          <div class="notif-texto">
+            <div>${n['Descripcion']}</div>
+            <div class="notif-hora">${n['Usuario']} · ${hora}</div>
+          </div>
+          <button type="button" onclick="reconocerNotificacion('${n['ID']}')" title="Reconocer">✓</button>
+        `;
+        cont.appendChild(item);
+      });
+    });
+  }
+
+  function toggleCampanaNotificaciones() {
+    const panel = document.getElementById('panel-notificaciones');
+    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+  }
+
+  // Quita esta notificacion de la vista actual. No es permanente en el servidor
+  // hasta que se use "Reconocer todas" — ver nota en la respuesta del chat.
+  function reconocerNotificacion(id) {
+    notificacionesDescartadasLocal.add(String(id));
+    renderizarNotificaciones();
+  }
+
+  async function reconocerTodasNotificaciones() {
+    try {
+      const resp = await llamarAPI('marcarNotificacionesVistas');
+      if (resp.ok) {
+        notificacionesCache = [];
+        notificacionesDescartadasLocal.clear();
+        renderizarNotificaciones();
+        document.getElementById('panel-notificaciones').style.display = 'none';
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo actualizar: ' + err.message, 'error');
+    }
   }
 
   function cerrarSesion() {
