@@ -758,6 +758,7 @@
       <div>
         <label for="cuenta-campo-saldo" id="cuenta-label-saldo">Saldo inicial (RD$)</label>
         <input type="number" id="cuenta-campo-saldo" step="0.01" value="0">
+        <p id="cuenta-nota-saldo" class="vacio" style="display:none; text-align:left; margin:4px 0 0;">No editable después de creada — usa "Ajustar saldo" en la lista para corregirlo.</p>
       </div>
 
       <!-- Campos especificos de Tarjeta de credito -->
@@ -998,7 +999,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "8.1";
+  const VERSION_APP = "8.2";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1460,6 +1461,7 @@
           </div>
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+            <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
             <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
             <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
           </div>
@@ -1547,6 +1549,8 @@
     document.getElementById('cuenta-campo-nombre').value = cuenta['Nombre'];
     document.getElementById('cuenta-campo-institucion').value = cuenta['Institucion'] || '';
     document.getElementById('cuenta-campo-saldo').value = cuenta['Saldo inicial'] || 0;
+    document.getElementById('cuenta-campo-saldo').disabled = true;
+    document.getElementById('cuenta-nota-saldo').style.display = 'block';
     document.getElementById('cuenta-campo-corte').value = cuenta['Fecha de corte'] || '';
     const limitePago = cuenta['Fecha limite de pago'] ? new Date(cuenta['Fecha limite de pago']) : null;
     document.getElementById('cuenta-campo-limite-pago').value = limitePago ? limitePago.toISOString().split('T')[0] : '';
@@ -1564,9 +1568,65 @@
     cuentaEditandoId = null;
     document.getElementById('form-cuenta').reset();
     document.getElementById('cuenta-campo-id').value = '';
+    document.getElementById('cuenta-campo-saldo').disabled = false;
+    document.getElementById('cuenta-nota-saldo').style.display = 'none';
     document.getElementById('cuenta-btn-guardar').textContent = 'Agregar cuenta';
     document.getElementById('cuenta-btn-cancelar').style.display = 'none';
     actualizarCamposCuenta();
+  }
+
+  // Corrige el saldo actual sin tocar "Saldo inicial": calcula la diferencia entre
+  // lo que el usuario dice que es real y lo que el sistema tiene calculado, y la
+  // registra como una transaccion de ajuste (queda un rastro visible del cambio).
+  async function ajustarSaldoCuenta(id) {
+    const cuenta = cuentasCache.find(c => String(c['ID']) === String(id));
+    if (!cuenta) return;
+
+    const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
+    const saldoActual = calcularSaldoCuenta(cuenta['Nombre']);
+    const pregunta = esPasivo
+      ? '¿Cuánto debes REALMENTE en "' + cuenta['Nombre'] + '" ahora? (según tu banco)'
+      : '¿Cuál es el saldo REAL de "' + cuenta['Nombre'] + '" ahora? (según tu banco)';
+
+    const respuesta = prompt(pregunta, saldoActual.toFixed(2));
+    if (respuesta === null) return;
+    const nuevoValor = parseFloat(respuesta);
+    if (isNaN(nuevoValor)) {
+      mostrarMensaje('El valor ingresado no es válido', 'error');
+      return;
+    }
+
+    const diferencia = nuevoValor - saldoActual;
+    if (Math.abs(diferencia) < 0.01) {
+      mostrarMensaje('El saldo ya está correcto, no se registró ningún ajuste', 'ok');
+      return;
+    }
+
+    // Para cuentas normales: si el saldo real es mayor, es un ingreso; si es menor, un gasto.
+    // Para tarjetas (pasivo): si la deuda real es mayor, es un gasto; si es menor, un ingreso.
+    let tipoAjuste;
+    if (!esPasivo) tipoAjuste = diferencia > 0 ? 'ingreso' : 'gasto';
+    else tipoAjuste = diferencia > 0 ? 'gasto' : 'ingreso';
+
+    try {
+      const resp = await llamarAPI('addTransaccion', {
+        tipo: tipoAjuste,
+        monto: Math.abs(diferencia),
+        categoria: 'Ajuste de saldo',
+        cuenta: cuenta['Nombre'],
+        descripcion: 'Ajuste de saldo (corrección manual)',
+        fuente: 'ajuste'
+      });
+      if (resp.ok) {
+        mostrarMensaje('Saldo ajustado correctamente', 'ok');
+        await cargarTransacciones();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al ajustar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo ajustar: ' + err.message, 'error');
+    }
   }
 
   async function eliminarCuenta(id) {
@@ -2467,7 +2527,7 @@
         <div class="item-info" style="display:flex; align-items:center; gap:10px;">
           <input type="checkbox" ${comprado ? 'checked' : ''} style="width:auto;"
             onchange="marcarComprado('${item['ID']}', this.checked)">
-          <div>
+          <div style="cursor:pointer;" onclick="editarProductoLista('${item['ID']}')" title="Clic para editar">
             <div class="categoria" style="${comprado ? 'text-decoration:line-through; color:var(--texto-secundario);' : ''}">
               ${item['Producto']} ${item['Cantidad'] ? '× ' + item['Cantidad'] : ''}
             </div>
@@ -2508,6 +2568,20 @@
     } catch (err) {
       mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
     }
+  }
+
+  function editarProductoLista(id) {
+    const item = listaComprasCache.find(x => String(x['ID']) === String(id));
+    if (!item) return;
+    productoListaEditandoId = id;
+    document.getElementById('lista-campo-id').value = id;
+    document.getElementById('lista-campo-producto').value = item['Producto'];
+    document.getElementById('lista-campo-cantidad').value = item['Cantidad'] || 1;
+    document.getElementById('lista-campo-categoria').value = item['Categoria'] || '';
+    document.getElementById('lista-campo-precio').value = item['Precio estimado'] || '';
+    document.getElementById('lista-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('lista-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-lista-compras').scrollIntoView({ behavior: 'smooth' });
   }
 
   function cancelarEdicionProductoLista() {
