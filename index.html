@@ -941,7 +941,10 @@
 
   <div class="panel" id="panel-prestamos">
   <section class="bloque">
-    <h3>Préstamos</h3>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:6px;">
+      <h3 style="margin:0;">Préstamos</h3>
+      <span class="cifra" style="color:var(--coral); font-weight:600;" id="valor-total-prestamos">Total: RD$0</span>
+    </div>
 
     <ul id="lista-prestamos" style="margin-bottom:1rem;">
       <li class="vacio">Cargando...</li>
@@ -1094,7 +1097,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "9.0";
+  const VERSION_APP = "9.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1899,6 +1902,15 @@
   function renderizarPrestamos() {
     const lista = document.getElementById('lista-prestamos');
     lista.innerHTML = '';
+
+    // Total en preestamos: solo los que aun tienen deuda pendiente (los saldados no cuentan)
+    const totalActivo = prestamosCache.reduce((suma, p) => {
+      const balance = parseFloat(p['Balance pendiente']) || 0;
+      return balance > 0 ? suma + balance : suma;
+    }, 0);
+    document.getElementById('valor-total-prestamos').textContent =
+      'Total: RD$' + totalActivo.toLocaleString('es-DO', { minimumFractionDigits: 2 });
+
     if (prestamosCache.length === 0) {
       lista.innerHTML = '<li class="vacio">Aún no has registrado ningún préstamo</li>';
       return;
@@ -1908,18 +1920,25 @@
       const cuota = parseFloat(p['Cuota mensual']) || 0;
       const tasa = p['Tasa de interes anual'] ? parseFloat(p['Tasa de interes anual']) : null;
       const proxima = p['Proxima fecha de pago'] ? new Date(p['Proxima fecha de pago']).toLocaleDateString('es-DO') : 'Sin definir';
+      const pagado = balance <= 0;
       const li = document.createElement('li');
       li.style.display = 'block';
+      const botonPago = pagado
+        ? ''
+        : `<button type="button" class="secundario" onclick="prepararPagoPrestamo('${p['ID']}')">Registrar pago</button>`;
+      const etiquetaPagado = pagado
+        ? ' <span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Pagado ✓</span>'
+        : '';
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div class="item-info" style="cursor:pointer;" onclick="prepararPagoPrestamo('${p['ID']}')" title="Clic para registrar un pago">
-            <div class="categoria">${p['Nombre']}</div>
+          <div class="item-info" style="cursor:pointer;" onclick="${pagado ? `toggleHistorialPrestamo('${p['ID']}')` : `prepararPagoPrestamo('${p['ID']}')`}" title="${pagado ? 'Clic para ver el historial' : 'Clic para registrar un pago'}">
+            <div class="categoria">${p['Nombre']}${etiquetaPagado}</div>
             <div class="detalle">Cuota RD$${cuota.toLocaleString('es-DO', {minimumFractionDigits:2})} · Próximo pago: ${proxima}${tasa ? ' · Tasa ' + tasa + '% anual' : ''}</div>
           </div>
-          <span class="item-monto cifra gasto">RD$${balance.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <span class="item-monto cifra ${pagado ? 'ingreso' : 'gasto'}">RD$${balance.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
-          <button type="button" class="secundario" onclick="prepararPagoPrestamo('${p['ID']}')">Registrar pago</button>
+          ${botonPago}
           <button type="button" class="secundario" onclick="toggleHistorialPrestamo('${p['ID']}')">Ver historial</button>
           <button type="button" class="secundario" onclick="editarPrestamo('${p['ID']}')">Editar</button>
           <button type="button" class="secundario" onclick="eliminarPrestamo('${p['ID']}')">Eliminar</button>
