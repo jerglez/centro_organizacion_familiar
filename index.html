@@ -343,7 +343,8 @@
   form#form-prestamo,
   form#form-lista-compras,
   form#form-usuario,
-  form#form-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-meta,
+  form#form-inventario { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
@@ -351,7 +352,8 @@
   form#form-prestamo .campo-ancho,
   form#form-lista-compras .campo-ancho,
   form#form-usuario .campo-ancho,
-  form#form-meta .campo-ancho { grid-column: 1 / -1; }
+  form#form-meta .campo-ancho,
+  form#form-inventario .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
@@ -359,7 +361,8 @@
   form#form-prestamo label,
   form#form-lista-compras label,
   form#form-usuario label,
-  form#form-meta label {
+  form#form-meta label,
+  form#form-inventario label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -380,7 +383,9 @@
   form#form-usuario input,
   form#form-usuario select,
   form#form-meta input,
-  form#form-meta select {
+  form#form-meta select,
+  form#form-inventario input,
+  form#form-inventario select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -423,7 +428,8 @@
   #lista-usuarios,
   #lista-compras-items,
   #lista-prestamos,
-  #lista-metas { list-style: none; margin: 0; padding: 0; }
+  #lista-metas,
+  #lista-inventario { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
@@ -578,7 +584,8 @@
     form#form-prestamo,
     form#form-lista-compras,
     form#form-usuario,
-    form#form-meta { grid-template-columns: 1fr; }
+    form#form-meta,
+    form#form-inventario { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -673,8 +680,8 @@
     <div class="menu-item" data-panel="listacompras" onclick="mostrarSeccion('listacompras')">
       <span class="punto punto-mango"></span>Lista de compras
     </div>
-    <div class="menu-item proximamente">
-      <span class="punto punto-mango"></span>Inventario <em>(próximamente)</em>
+    <div class="menu-item" data-panel="inventario" onclick="mostrarSeccion('inventario')">
+      <span class="punto punto-mango"></span>Inventario
     </div>
 
     <div class="menu-grupo">OTROS</div>
@@ -1140,6 +1147,56 @@
   </section>
   </div>
 
+  <div class="panel" id="panel-inventario">
+  <section class="bloque">
+    <h3>Inventario</h3>
+
+    <ul id="lista-inventario" style="margin-bottom:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;"
+      onclick="cancelarEdicionInventario(); document.getElementById('inventario-form-contenedor').style.display='block'; document.getElementById('form-inventario').scrollIntoView({behavior:'smooth'});">
+      + Nuevo artículo
+    </button>
+
+    <div id="inventario-form-contenedor" style="display:none;">
+    <form id="form-inventario" onsubmit="return guardarInventario(event)">
+      <input type="hidden" id="inventario-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="inventario-campo-articulo">Artículo</label>
+        <input type="text" id="inventario-campo-articulo" placeholder="Ej. Arroz 5lb" required>
+      </div>
+      <div>
+        <label for="inventario-campo-categoria">Categoría (opcional)</label>
+        <input type="text" id="inventario-campo-categoria" placeholder="Ej. Víveres">
+      </div>
+      <div>
+        <label for="inventario-campo-fecha">Fecha de compra</label>
+        <input type="date" id="inventario-campo-fecha">
+      </div>
+      <div>
+        <label for="inventario-campo-cantidad">Cantidad</label>
+        <input type="number" id="inventario-campo-cantidad" min="1" value="1">
+      </div>
+      <div>
+        <label for="inventario-campo-costo">Costo (RD$)</label>
+        <input type="number" id="inventario-campo-costo" step="0.01" min="0" value="0">
+      </div>
+      <div class="campo-ancho">
+        <label for="inventario-campo-nota">Nota (opcional)</label>
+        <input type="text" id="inventario-campo-nota" placeholder="Ej. marca, garantía, ubicación">
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="inventario-btn-guardar" style="flex:1;">Agregar artículo</button>
+        <button type="button" class="secundario" id="inventario-btn-cancelar"
+          onclick="cancelarEdicionInventario(); document.getElementById('inventario-form-contenedor').style.display='none';" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+    </div>
+  </section>
+  </div>
+
   <div class="panel" id="panel-usuarios">
   <section class="bloque">
     <h3>Usuarios con acceso</h3>
@@ -1186,7 +1243,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "10.0";
+  const VERSION_APP = "10.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1281,7 +1338,8 @@
       elementoActivo.closest('#form-prestamo') ||
       elementoActivo.closest('#form-lista-compras') ||
       elementoActivo.closest('#form-usuario') ||
-      elementoActivo.closest('#form-meta')
+      elementoActivo.closest('#form-meta') ||
+      elementoActivo.closest('#form-inventario')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
     if (escribiendoEnFormulario) return;
@@ -1297,6 +1355,7 @@
     await cargarUsuarios();
     await cargarNotificaciones();
     await cargarMetas();
+    await cargarInventario();
     actualizarUltimaSincronizacion();
   }
 
@@ -2479,6 +2538,8 @@
   let presupuestosCache = [];
   let metasCache = [];
   let metaEditandoId = null;
+  let inventarioCache = [];
+  let inventarioEditandoId = null;
 
   async function cargarPresupuestos() {
     const resp = await llamarAPI('getPresupuestos');
@@ -2871,6 +2932,10 @@
       if (resp.ok) {
         await cargarListaCompras();
         actualizarUltimaSincronizacion();
+        if (comprado) {
+          const item = listaComprasCache.find(x => String(x['ID']) === String(id));
+          if (item) await ofrecerAgregarAlInventario(item);
+        }
       } else {
         mostrarMensaje('Error: ' + resp.error, 'error');
       }
@@ -3407,6 +3472,163 @@
       boton.disabled = false;
     }
     return false;
+  }
+
+  // ---------- Inventario ----------
+  async function cargarInventario() {
+    const resp = await llamarAPI('getInventario');
+    if (resp.ok) {
+      inventarioCache = resp.datos || [];
+      renderizarInventario();
+    }
+  }
+
+  function renderizarInventario() {
+    const lista = document.getElementById('lista-inventario');
+    lista.innerHTML = '';
+    if (inventarioCache.length === 0) {
+      lista.innerHTML = '<li class="vacio">Aún no has registrado ningún artículo</li>';
+      return;
+    }
+
+    // Mas reciente primero
+    const ordenados = inventarioCache.slice().sort((a, b) => {
+      const fa = a['Fecha de compra'] ? new Date(a['Fecha de compra']) : new Date(0);
+      const fb = b['Fecha de compra'] ? new Date(b['Fecha de compra']) : new Date(0);
+      return fb - fa;
+    });
+
+    ordenados.forEach(item => {
+      const fecha = item['Fecha de compra'] ? new Date(item['Fecha de compra']).toLocaleDateString('es-DO') : '';
+      const costo = parseFloat(item['Costo']) || 0;
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="item-info" style="cursor:pointer;" onclick="editarInventario('${item['ID']}')" title="Clic para editar">
+          <div class="categoria">${item['Articulo']} ${item['Cantidad'] ? '× ' + item['Cantidad'] : ''}</div>
+          <div class="detalle">${item['Categoria'] || ''} ${fecha ? '· ' + fecha : ''} ${item['Comprado por'] ? '· ' + item['Comprado por'] : ''}</div>
+          ${item['Nota'] ? `<div class="detalle">${item['Nota']}</div>` : ''}
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="item-monto cifra">RD$${costo.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <button type="button" class="secundario" onclick="eliminarInventario('${item['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  function editarInventario(id) {
+    const item = inventarioCache.find(x => String(x['ID']) === String(id));
+    if (!item) return;
+    inventarioEditandoId = id;
+    document.getElementById('inventario-campo-id').value = id;
+    document.getElementById('inventario-campo-articulo').value = item['Articulo'];
+    document.getElementById('inventario-campo-categoria').value = item['Categoria'] || '';
+    const fecha = item['Fecha de compra'] ? new Date(item['Fecha de compra']) : null;
+    document.getElementById('inventario-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('inventario-campo-cantidad').value = item['Cantidad'] || 1;
+    document.getElementById('inventario-campo-costo').value = item['Costo'] || 0;
+    document.getElementById('inventario-campo-nota').value = item['Nota'] || '';
+    document.getElementById('inventario-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('inventario-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('inventario-form-contenedor').style.display = 'block';
+    document.getElementById('form-inventario').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionInventario() {
+    inventarioEditandoId = null;
+    document.getElementById('form-inventario').reset();
+    document.getElementById('inventario-campo-id').value = '';
+    document.getElementById('inventario-btn-guardar').textContent = 'Agregar artículo';
+    document.getElementById('inventario-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarInventario(id) {
+    if (!confirm('¿Eliminar este artículo del inventario?')) return;
+    try {
+      const resp = await llamarAPI('deleteInventario', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Artículo eliminado', 'ok');
+        await cargarInventario();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarInventario(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('inventario-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      articulo: document.getElementById('inventario-campo-articulo').value.trim(),
+      categoria: document.getElementById('inventario-campo-categoria').value.trim(),
+      fechaCompra: document.getElementById('inventario-campo-fecha').value,
+      cantidad: parseInt(document.getElementById('inventario-campo-cantidad').value, 10) || 1,
+      costo: parseFloat(document.getElementById('inventario-campo-costo').value) || 0,
+      nota: document.getElementById('inventario-campo-nota').value.trim()
+    };
+
+    try {
+      let resp;
+      if (inventarioEditandoId) {
+        payload.id = inventarioEditandoId;
+        resp = await llamarAPI('updateInventario', payload);
+      } else {
+        resp = await llamarAPI('addInventario', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(inventarioEditandoId ? 'Artículo actualizado' : 'Artículo agregado', 'ok');
+        cancelarEdicionInventario();
+        document.getElementById('inventario-form-contenedor').style.display = 'none';
+        await cargarInventario();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
+  }
+
+  // Cuando marcas un producto de la Lista de compras como comprado, se
+  // ofrece agregarlo al Inventario — asi cierra el ciclo planificar -> comprar.
+  async function ofrecerAgregarAlInventario(item) {
+    const irAlInventario = confirm('¿Agregar "' + item['Producto'] + '" al Inventario, con la fecha de hoy?');
+    if (!irAlInventario) return;
+
+    const costoSugerido = (parseFloat(item['Precio estimado']) || 0) * (parseFloat(item['Cantidad']) || 1);
+    const costoTexto = prompt('¿Cuánto pagaste en total por "' + item['Producto'] + '"? (RD$)', costoSugerido.toFixed(2));
+    if (costoTexto === null) return;
+    const costo = parseFloat(costoTexto) || 0;
+
+    try {
+      const resp = await llamarAPI('addInventario', {
+        articulo: item['Producto'],
+        categoria: item['Categoria'] || '',
+        fechaCompra: new Date().toISOString().split('T')[0],
+        cantidad: item['Cantidad'] || 1,
+        costo: costo,
+        nota: 'Agregado desde Lista de compras'
+      });
+      if (resp.ok) {
+        mostrarMensaje('Agregado al Inventario', 'ok');
+        await cargarInventario();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo agregar al inventario: ' + err.message, 'error');
+    }
   }
 
   function cerrarSesion() {
