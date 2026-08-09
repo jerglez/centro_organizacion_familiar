@@ -830,6 +830,10 @@
 
   <section class="bloque">
     <h3>Cuentas</h3>
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-estado-cuenta="activas" onclick="cambiarFiltroEstadoCuenta('activas')">Cuentas activas</button>
+      <button type="button" class="filtro-btn" data-filtro-estado-cuenta="cerradas" onclick="cambiarFiltroEstadoCuenta('cerradas')">Cuentas cerradas</button>
+    </div>
     <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
       <input type="hidden" id="cuenta-campo-id" value="">
       <div>
@@ -944,6 +948,11 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:6px;">
       <h3 style="margin:0;">Préstamos</h3>
       <span class="cifra" style="color:var(--coral); font-weight:600;" id="valor-total-prestamos">Total: RD$0</span>
+    </div>
+
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-prestamo="activos" onclick="cambiarFiltroPrestamos('activos')">Activos</button>
+      <button type="button" class="filtro-btn" data-filtro-prestamo="saldados" onclick="cambiarFiltroPrestamos('saldados')">Saldados</button>
     </div>
 
     <ul id="lista-prestamos" style="margin-bottom:1rem;">
@@ -1097,7 +1106,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "9.1";
+  const VERSION_APP = "9.2";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1494,6 +1503,7 @@
   }
 
   let filtroTipoCuenta = 'todos';
+  let filtroEstadoCuenta = 'activas';
 
   function filtrarCuentasPorTipo(tipo) {
     filtroTipoCuenta = (filtroTipoCuenta === tipo) ? 'todos' : tipo; // clic de nuevo = quitar filtro
@@ -1503,9 +1513,21 @@
     renderizarCuentas();
   }
 
+  function cambiarFiltroEstadoCuenta(valor) {
+    filtroEstadoCuenta = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-estado-cuenta]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.filtroEstadoCuenta === valor);
+    });
+    renderizarCuentas();
+  }
+
+  function esCuentaActiva(c) {
+    return c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí' || !c['Activo'];
+  }
+
   function renderizarResumenCuentas() {
     let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0, totalInversion = 0;
-    cuentasCache.forEach(c => {
+    cuentasCache.filter(esCuentaActiva).forEach(c => {
       const saldo = calcularSaldoCuenta(c['Nombre']);
       if (c['Tipo'] === 'Ahorro') totalAhorro += saldo;
       else if (c['Tipo'] === 'Debito') totalDebito += saldo;
@@ -1518,6 +1540,23 @@
     document.getElementById('valor-total-inversion').textContent = 'RD$' + totalInversion.toLocaleString('es-DO', {minimumFractionDigits:2});
   }
 
+  async function toggleActivoCuenta(id, activarla) {
+    const verbo = activarla ? 'reabrir' : 'cerrar';
+    if (!confirm('¿Deseas ' + verbo + ' esta cuenta? Sus transacciones y transferencias pasadas no se pierden.')) return;
+    try {
+      const resp = await llamarAPI('toggleActivoCuenta', { id: id, activo: activarla });
+      if (resp.ok) {
+        mostrarMensaje(activarla ? 'Cuenta reabierta' : 'Cuenta cerrada', 'ok');
+        await cargarCuentas();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo actualizar: ' + err.message, 'error');
+    }
+  }
+
   function renderizarCuentas() {
     renderizarResumenCuentas();
     const lista = document.getElementById('lista-cuentas');
@@ -1527,12 +1566,16 @@
       return;
     }
 
-    const filtradas = filtroTipoCuenta === 'todos'
+    let filtradas = filtroTipoCuenta === 'todos'
       ? cuentasCache.slice()
       : cuentasCache.filter(c => c['Tipo'] === filtroTipoCuenta);
 
+    filtradas = filtradas.filter(c => filtroEstadoCuenta === 'activas' ? esCuentaActiva(c) : !esCuentaActiva(c));
+
     if (filtradas.length === 0) {
-      lista.innerHTML = '<li class="vacio">No tienes cuentas de este tipo</li>';
+      lista.innerHTML = filtroEstadoCuenta === 'activas'
+        ? '<li class="vacio">No tienes cuentas activas de este tipo</li>'
+        : '<li class="vacio">No tienes cuentas cerradas</li>';
       return;
     }
 
@@ -1544,14 +1587,20 @@
       const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
       const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
       const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
+      const activa = esCuentaActiva(cuenta);
 
       let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
+      if (!activa) detalleExtra = '<span class="badge-alerta prealerta">Cerrada</span> ' + detalleExtra;
       if (cuenta['Tipo'] === 'Inversion') {
         const aportado = calcularAportadoInversion(cuenta['Nombre']);
         const ganancia = calcularGananciaInversion(cuenta['Nombre']);
         const pctGanancia = aportado > 0 ? (ganancia / aportado * 100) : 0;
         detalleExtra += ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
       }
+
+      const botonCerrarReabrir = activa
+        ? `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', false)">Cerrar cuenta</button>`
+        : `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', true)">Reabrir cuenta</button>`;
 
       const li = document.createElement('li');
       li.style.display = 'block';
@@ -1565,6 +1614,7 @@
             <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
             <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
             <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
+            ${botonCerrarReabrir}
             <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
           </div>
         </div>
@@ -1899,6 +1949,16 @@
     if (valorPrevio) select.value = valorPrevio;
   }
 
+  let filtroPrestamos = 'activos';
+
+  function cambiarFiltroPrestamos(valor) {
+    filtroPrestamos = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-prestamo]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.filtroPrestamo === valor);
+    });
+    renderizarPrestamos();
+  }
+
   function renderizarPrestamos() {
     const lista = document.getElementById('lista-prestamos');
     lista.innerHTML = '';
@@ -1915,7 +1975,20 @@
       lista.innerHTML = '<li class="vacio">Aún no has registrado ningún préstamo</li>';
       return;
     }
-    prestamosCache.forEach(p => {
+
+    const filtrados = prestamosCache.filter(p => {
+      const balance = parseFloat(p['Balance pendiente']) || 0;
+      return filtroPrestamos === 'activos' ? balance > 0 : balance <= 0;
+    });
+
+    if (filtrados.length === 0) {
+      lista.innerHTML = filtroPrestamos === 'activos'
+        ? '<li class="vacio">No tienes préstamos activos</li>'
+        : '<li class="vacio">Aún no tienes préstamos saldados</li>';
+      return;
+    }
+
+    filtrados.forEach(p => {
       const balance = parseFloat(p['Balance pendiente']) || 0;
       const cuota = parseFloat(p['Cuota mensual']) || 0;
       const tasa = p['Tasa de interes anual'] ? parseFloat(p['Tasa de interes anual']) : null;
@@ -2061,7 +2134,11 @@
   }
 
   async function eliminarPrestamo(id) {
-    if (!confirm('¿Eliminar este préstamo? Esto no elimina los pagos ya registrados como gastos.')) return;
+    const tieneHistorial = historialPagosCache.some(h => String(h['Prestamo ID']) === String(id));
+    const mensaje = tieneHistorial
+      ? '¿Eliminar este préstamo? Tiene pagos registrados en el historial — esos registros seguirán en tu Google Sheets, pero ya no podrás verlos desde la app una vez borres este préstamo. Considera dejarlo como "Saldado" en vez de eliminarlo.'
+      : '¿Eliminar este préstamo?';
+    if (!confirm(mensaje)) return;
     try {
       const resp = await llamarAPI('deletePrestamo', { id: id });
       if (resp.ok) {
