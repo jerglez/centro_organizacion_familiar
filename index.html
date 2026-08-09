@@ -547,6 +547,18 @@
     header.app-header { flex-direction: column; align-items: flex-start; }
     .acciones-header { width: 100%; justify-content: space-between; }
 
+    /* El panel de notificaciones se ancla al viewport, no al pequeno boton
+       de la campana — asi siempre cabe completo en la pantalla del celular. */
+    #panel-notificaciones {
+      position: fixed;
+      top: 64px;
+      left: 12px;
+      right: 12px;
+      width: auto;
+      max-width: none;
+    }
+    #lista-notificaciones { max-height: 60vh; }
+
     .resumen { gap: 0.5rem; }
     .resumen .tarjeta { padding: 0.6rem 0.55rem; }
     .resumen .tarjeta span.label { font-size: 0.66rem; }
@@ -833,7 +845,12 @@
     <div class="filtro-movimientos">
       <button type="button" class="filtro-btn activo" data-filtro-estado-cuenta="activas" onclick="cambiarFiltroEstadoCuenta('activas')">Cuentas activas</button>
       <button type="button" class="filtro-btn" data-filtro-estado-cuenta="cerradas" onclick="cambiarFiltroEstadoCuenta('cerradas')">Cuentas cerradas</button>
+      <button type="button" class="filtro-btn" style="margin-left:auto;"
+        onclick="cancelarEdicionCuenta(); document.getElementById('cuenta-form-contenedor').style.display='block'; document.getElementById('form-cuenta').scrollIntoView({behavior:'smooth'});">
+        + Nueva cuenta
+      </button>
     </div>
+    <div id="cuenta-form-contenedor" style="display:none;">
     <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
       <input type="hidden" id="cuenta-campo-id" value="">
       <div>
@@ -894,9 +911,11 @@
 
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="cuenta-btn-guardar" style="flex:1;">Agregar cuenta</button>
-        <button type="button" class="secundario" id="cuenta-btn-cancelar" onclick="cancelarEdicionCuenta()" style="display:none;">Cancelar</button>
+        <button type="button" class="secundario" id="cuenta-btn-cancelar"
+          onclick="cancelarEdicionCuenta(); document.getElementById('cuenta-form-contenedor').style.display='none';" style="display:none;">Cancelar</button>
       </div>
     </form>
+    </div>
 
     <ul id="lista-cuentas" style="margin-top:1rem;">
       <li class="vacio">Cargando...</li>
@@ -1106,7 +1125,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "9.2";
+  const VERSION_APP = "9.3";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1713,6 +1732,7 @@
     actualizarCamposCuenta();
     document.getElementById('cuenta-btn-guardar').textContent = 'Guardar cambios';
     document.getElementById('cuenta-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('cuenta-form-contenedor').style.display = 'block';
     document.getElementById('form-cuenta').scrollIntoView({ behavior: 'smooth' });
   }
 
