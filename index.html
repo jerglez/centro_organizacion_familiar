@@ -2,8 +2,19 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Centro de Organización Familiar</title>
+
+<!-- PWA: instalable en Android e iPhone -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E5C56">
+<link rel="icon" type="image/png" href="icon-192.png">
+<!-- Etiquetas especificas que iPhone necesita (Android usa el manifest.json de arriba) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Centro Familiar">
+<link rel="apple-touch-icon" href="icon-192.png">
+
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -852,6 +863,10 @@
       <span class="label">Inversiones</span>
       <span class="valor" id="valor-total-inversion">RD$0</span>
     </div>
+    <div class="tarjeta ingresos tarjeta-filtro" data-tipo-cuenta="Efectivo" onclick="filtrarCuentasPorTipo('Efectivo')" style="cursor:pointer;">
+      <span class="label">Efectivo</span>
+      <span class="valor" id="valor-total-efectivo">RD$0</span>
+    </div>
   </div>
   <p class="vacio" style="text-align:left; margin:0.4rem 0 0;">Toca un cuadro para filtrar la lista por ese tipo. Toca de nuevo para quitar el filtro.</p>
 
@@ -970,6 +985,24 @@
       </div>
       <button type="submit" class="guardar" id="transf-btn-guardar">Transferir</button>
     </form>
+
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-transf="todos" onclick="cambiarFiltroTransferencias('todos')">Todos</button>
+      <button type="button" class="filtro-btn" data-filtro-transf="mes" onclick="cambiarFiltroTransferencias('mes')">Este mes</button>
+      <button type="button" class="filtro-btn" data-filtro-transf="rango" onclick="cambiarFiltroTransferencias('rango')">Rango</button>
+    </div>
+    <div id="rango-transferencias" class="campo-ancho" style="display:none; margin-bottom:0.9rem;">
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+        <div>
+          <label for="rango-transf-desde" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Desde</label>
+          <input type="date" id="rango-transf-desde" onchange="renderizarListaTransferencias()">
+        </div>
+        <div>
+          <label for="rango-transf-hasta" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Hasta</label>
+          <input type="date" id="rango-transf-hasta" onchange="renderizarListaTransferencias()">
+        </div>
+      </div>
+    </div>
 
     <ul id="lista-transferencias" style="margin-top:1rem;">
       <li class="vacio">Cargando...</li>
@@ -1118,7 +1151,7 @@
       </div>
       <div>
         <label for="lista-campo-cantidad">Cantidad</label>
-        <input type="number" id="lista-campo-cantidad" min="1" value="1">
+        <input type="number" id="lista-campo-cantidad" step="0.01" min="0.01" value="1">
       </div>
       <div>
         <label for="lista-campo-categoria">Categoría (opcional)</label>
@@ -1243,7 +1276,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "10.1";
+  const VERSION_APP = "11.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1667,18 +1700,20 @@
   }
 
   function renderizarResumenCuentas() {
-    let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0, totalInversion = 0;
+    let totalAhorro = 0, totalDebito = 0, totalDeudaTarjetas = 0, totalInversion = 0, totalEfectivo = 0;
     cuentasCache.filter(esCuentaActiva).forEach(c => {
       const saldo = calcularSaldoCuenta(c['Nombre']);
       if (c['Tipo'] === 'Ahorro') totalAhorro += saldo;
       else if (c['Tipo'] === 'Debito') totalDebito += saldo;
       else if (c['Tipo'] === 'Tarjeta de credito') totalDeudaTarjetas += saldo;
       else if (c['Tipo'] === 'Inversion') totalInversion += saldo;
+      else if (c['Tipo'] === 'Efectivo') totalEfectivo += saldo;
     });
     document.getElementById('valor-total-ahorro').textContent = 'RD$' + totalAhorro.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-total-debito').textContent = 'RD$' + totalDebito.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-total-deuda-tarjetas').textContent = 'RD$' + totalDeudaTarjetas.toLocaleString('es-DO', {minimumFractionDigits:2});
     document.getElementById('valor-total-inversion').textContent = 'RD$' + totalInversion.toLocaleString('es-DO', {minimumFractionDigits:2});
+    document.getElementById('valor-total-efectivo').textContent = 'RD$' + totalEfectivo.toLocaleString('es-DO', {minimumFractionDigits:2});
   }
 
   async function toggleActivoCuenta(id, activarla) {
@@ -1720,48 +1755,71 @@
       return;
     }
 
-    // Ordenar de mayor a menor saldo (las deudas de tarjeta se comparan por lo que se debe)
-    const ordenadas = filtradas.sort((a, b) => calcularSaldoCuenta(b['Nombre']) - calcularSaldoCuenta(a['Nombre']));
+    if (filtroTipoCuenta === 'todos') {
+      // Sin un tipo especifico elegido: agrupar por tipo, cada grupo ordenado por saldo
+      const ORDEN_TIPOS = ['Ahorro', 'Debito', 'Tarjeta de credito', 'Inversion', 'Efectivo'];
+      const ETIQUETAS_TIPOS = {
+        'Ahorro': 'AHORRO', 'Debito': 'DÉBITO', 'Tarjeta de credito': 'TARJETAS DE CRÉDITO',
+        'Inversion': 'INVERSIÓN', 'Efectivo': 'EFECTIVO'
+      };
+      ORDEN_TIPOS.forEach(tipo => {
+        const delTipo = filtradas.filter(c => c['Tipo'] === tipo)
+          .sort((a, b) => calcularSaldoCuenta(b['Nombre']) - calcularSaldoCuenta(a['Nombre']));
+        if (delTipo.length === 0) return;
 
-    ordenadas.forEach(cuenta => {
-      const saldo = calcularSaldoCuenta(cuenta['Nombre']);
-      const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
-      const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
-      const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
-      const activa = esCuentaActiva(cuenta);
+        const encabezado = document.createElement('div');
+        encabezado.className = 'notif-grupo';
+        encabezado.style.padding = '0.6rem 0';
+        encabezado.textContent = ETIQUETAS_TIPOS[tipo] + ' (' + delTipo.length + ')';
+        lista.appendChild(encabezado);
 
-      let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
-      if (!activa) detalleExtra = '<span class="badge-alerta prealerta">Cerrada</span> ' + detalleExtra;
-      if (cuenta['Tipo'] === 'Inversion') {
-        const aportado = calcularAportadoInversion(cuenta['Nombre']);
-        const ganancia = calcularGananciaInversion(cuenta['Nombre']);
-        const pctGanancia = aportado > 0 ? (ganancia / aportado * 100) : 0;
-        detalleExtra += ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
-      }
+        delTipo.forEach(cuenta => lista.appendChild(crearFilaCuenta(cuenta)));
+      });
+    } else {
+      // Un solo tipo ya filtrado: lista simple ordenada por saldo
+      const ordenadas = filtradas.sort((a, b) => calcularSaldoCuenta(b['Nombre']) - calcularSaldoCuenta(a['Nombre']));
+      ordenadas.forEach(cuenta => lista.appendChild(crearFilaCuenta(cuenta)));
+    }
+  }
 
-      const botonCerrarReabrir = activa
-        ? `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', false)">Cerrar cuenta</button>`
-        : `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', true)">Reabrir cuenta</button>`;
+  function crearFilaCuenta(cuenta) {
+    const saldo = calcularSaldoCuenta(cuenta['Nombre']);
+    const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
+    const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
+    const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
+    const activa = esCuentaActiva(cuenta);
 
-      const li = document.createElement('li');
-      li.style.display = 'block';
-      li.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div class="item-info" style="cursor:pointer;" onclick="editarCuenta('${cuenta['ID']}')" title="Clic para ver y editar los datos">
-            <div class="categoria">${cuenta['Nombre']}</div>
-            <div class="detalle">${detalleExtra}</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
-            <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
-            <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
-            ${botonCerrarReabrir}
-            <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
-          </div>
+    let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
+    if (!activa) detalleExtra = '<span class="badge-alerta prealerta">Cerrada</span> ' + detalleExtra;
+    if (cuenta['Tipo'] === 'Inversion') {
+      const aportado = calcularAportadoInversion(cuenta['Nombre']);
+      const ganancia = calcularGananciaInversion(cuenta['Nombre']);
+      const pctGanancia = aportado > 0 ? (ganancia / aportado * 100) : 0;
+      detalleExtra += ` · Ganancia RD$${ganancia.toLocaleString('es-DO', {minimumFractionDigits:2})} (${pctGanancia >= 0 ? '+' : ''}${pctGanancia.toFixed(1)}%)`;
+    }
+
+    const botonCerrarReabrir = activa
+      ? `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', false)">Cerrar cuenta</button>`
+      : `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', true)">Reabrir cuenta</button>`;
+
+    const li = document.createElement('li');
+    li.style.display = 'block';
+    li.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div class="item-info" style="cursor:pointer;" onclick="editarCuenta('${cuenta['ID']}')" title="Clic para ver y editar los datos">
+          <div class="categoria">${cuenta['Nombre']}</div>
+          <div class="detalle">${detalleExtra}</div>
         </div>
-      `;
-      lista.appendChild(li);
-    });
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
+          <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
+          ${botonCerrarReabrir}
+          <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
+        </div>
+      </div>
+    `;
+    return li;
   }
 
   // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
@@ -1987,23 +2045,59 @@
   }
 
   // ---------- Transferencias ----------
+  let filtroTransferencias = 'todos';
+
+  function cambiarFiltroTransferencias(valor) {
+    filtroTransferencias = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-transf]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.filtroTransf === valor);
+    });
+    document.getElementById('rango-transferencias').style.display = valor === 'rango' ? 'block' : 'none';
+    renderizarListaTransferencias();
+  }
+
+  function cumpleFiltroTransferencias(fecha) {
+    if (filtroTransferencias === 'todos') return true;
+    if (!fecha) return false;
+    const ahora = new Date();
+    if (filtroTransferencias === 'mes') {
+      return fecha.getMonth() === ahora.getMonth() && fecha.getFullYear() === ahora.getFullYear();
+    }
+    if (filtroTransferencias === 'rango') {
+      const desdeTexto = document.getElementById('rango-transf-desde').value;
+      const hastaTexto = document.getElementById('rango-transf-hasta').value;
+      if (desdeTexto && fecha < new Date(desdeTexto)) return false;
+      if (hastaTexto && fecha > new Date(hastaTexto + 'T23:59:59')) return false;
+      return true;
+    }
+    return true;
+  }
+
   async function cargarTransferencias() {
     const resp = await llamarAPI('getTransferencias');
-    const lista = document.getElementById('lista-transferencias');
     if (!resp.ok) {
-      lista.innerHTML = '<li class="vacio">No se pudieron cargar las transferencias</li>';
+      document.getElementById('lista-transferencias').innerHTML = '<li class="vacio">No se pudieron cargar las transferencias</li>';
       return;
     }
     transferenciasCache = resp.datos || [];
-    const transferencias = transferenciasCache.slice().reverse();
+    renderizarListaTransferencias();
+    // Recalcula los saldos de cuentas, ya que una transferencia los afecta
+    renderizarCuentas();
+  }
 
+  function renderizarListaTransferencias() {
+    const lista = document.getElementById('lista-transferencias');
     lista.innerHTML = '';
-    if (transferencias.length === 0) {
-      lista.innerHTML = '<li class="vacio">Aún no hay transferencias registradas</li>';
-    }
+    const transferencias = transferenciasCache.slice().reverse();
+    let mostradas = 0;
+
     transferencias.forEach(tr => {
+      const fechaTransf = tr['Fecha'] ? new Date(tr['Fecha']) : null;
+      if (!cumpleFiltroTransferencias(fechaTransf)) return;
+      mostradas++;
+
       const monto = parseFloat(tr['Monto']) || 0;
-      const fecha = tr['Fecha'] ? new Date(tr['Fecha']).toLocaleDateString('es-DO') : '';
+      const fecha = fechaTransf ? fechaTransf.toLocaleDateString('es-DO') : '';
       const li = document.createElement('li');
       li.innerHTML = `
         <div class="item-info">
@@ -2015,8 +2109,9 @@
       lista.appendChild(li);
     });
 
-    // Recalcula los saldos de cuentas, ya que una transferencia los afecta
-    renderizarCuentas();
+    if (mostradas === 0) {
+      lista.innerHTML = '<li class="vacio">No hay transferencias en este período</li>';
+    }
   }
 
   async function agregarTransferencia(evento) {
@@ -3034,7 +3129,7 @@
 
     const payload = {
       producto: document.getElementById('lista-campo-producto').value.trim(),
-      cantidad: parseInt(document.getElementById('lista-campo-cantidad').value, 10) || 1,
+      cantidad: parseFloat(document.getElementById('lista-campo-cantidad').value) || 1,
       categoria: document.getElementById('lista-campo-categoria').value.trim(),
       precioEstimado: parseFloat(document.getElementById('lista-campo-precio').value) || ''
     };
@@ -3641,6 +3736,15 @@
     document.getElementById('app-screen').style.display = 'none';
     document.getElementById('login-error').style.display = 'none';
     document.getElementById('login-screen').style.display = 'block';
+  }
+
+  // Registrar el service worker para que la app sea instalable (PWA)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.log('No se pudo registrar el service worker:', err);
+      });
+    });
   }
 </script>
 
