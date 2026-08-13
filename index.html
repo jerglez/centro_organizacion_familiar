@@ -1005,6 +1005,8 @@
       <button type="submit" class="guardar" id="transf-btn-guardar">Transferir</button>
     </form>
 
+    <h3 style="margin: 1.5rem 0 0.75rem; padding-top: 1.25rem; border-top: 1px solid var(--borde);">Historial de Transferencias</h3>
+
     <div class="filtro-movimientos">
       <button type="button" class="filtro-btn activo" data-filtro-transf="todos" onclick="cambiarFiltroTransferencias('todos')">Todos</button>
       <button type="button" class="filtro-btn" data-filtro-transf="mes" onclick="cambiarFiltroTransferencias('mes')">Este mes</button>
@@ -1295,7 +1297,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "11.2";
+  const VERSION_APP = "11.3";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2069,9 +2071,12 @@
 
   // ---------- Transferencias ----------
   let filtroTransferencias = 'todos';
+  const TRANSFERENCIAS_POR_PAGINA = 20;
+  let transferenciasMostradas = TRANSFERENCIAS_POR_PAGINA;
 
   function cambiarFiltroTransferencias(valor) {
     filtroTransferencias = valor;
+    transferenciasMostradas = TRANSFERENCIAS_POR_PAGINA; // reiniciar la paginacion al cambiar de filtro
     document.querySelectorAll('.filtro-btn[data-filtro-transf]').forEach(b => {
       b.classList.toggle('activo', b.dataset.filtroTransf === valor);
     });
@@ -2096,6 +2101,11 @@
     return true;
   }
 
+  function verMasTransferencias() {
+    transferenciasMostradas += TRANSFERENCIAS_POR_PAGINA;
+    renderizarListaTransferencias();
+  }
+
   async function cargarTransferencias() {
     const resp = await llamarAPI('getTransferencias');
     if (!resp.ok) {
@@ -2111,14 +2121,21 @@
   function renderizarListaTransferencias() {
     const lista = document.getElementById('lista-transferencias');
     lista.innerHTML = '';
-    const transferencias = transferenciasCache.slice().reverse();
-    let mostradas = 0;
 
-    transferencias.forEach(tr => {
+    const filtradas = transferenciasCache.slice().reverse().filter(tr => {
       const fechaTransf = tr['Fecha'] ? new Date(tr['Fecha']) : null;
-      if (!cumpleFiltroTransferencias(fechaTransf)) return;
-      mostradas++;
+      return cumpleFiltroTransferencias(fechaTransf);
+    });
 
+    if (filtradas.length === 0) {
+      lista.innerHTML = '<li class="vacio">No hay transferencias en este período</li>';
+      return;
+    }
+
+    const visibles = filtradas.slice(0, transferenciasMostradas);
+
+    visibles.forEach(tr => {
+      const fechaTransf = tr['Fecha'] ? new Date(tr['Fecha']) : null;
       const monto = parseFloat(tr['Monto']) || 0;
       const fecha = fechaTransf ? fechaTransf.toLocaleDateString('es-DO') : '';
       const li = document.createElement('li');
@@ -2132,8 +2149,12 @@
       lista.appendChild(li);
     });
 
-    if (mostradas === 0) {
-      lista.innerHTML = '<li class="vacio">No hay transferencias en este período</li>';
+    if (filtradas.length > transferenciasMostradas) {
+      const restantes = filtradas.length - transferenciasMostradas;
+      const liVerMas = document.createElement('li');
+      liVerMas.style.justifyContent = 'center';
+      liVerMas.innerHTML = `<button type="button" class="secundario" onclick="verMasTransferencias()">Ver ${Math.min(restantes, TRANSFERENCIAS_POR_PAGINA)} más (quedan ${restantes})</button>`;
+      lista.appendChild(liVerMas);
     }
   }
 
