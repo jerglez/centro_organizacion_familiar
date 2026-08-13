@@ -1297,7 +1297,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "11.3";
+  const VERSION_APP = "11.4";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2293,6 +2293,7 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           ${botonPago}
+          <button type="button" class="secundario" onclick="ajustarBalancePrestamo('${p['ID']}')">Ajustar balance</button>
           <button type="button" class="secundario" onclick="toggleHistorialPrestamo('${p['ID']}')">Ver historial</button>
           <button type="button" class="secundario" onclick="editarPrestamo('${p['ID']}')">Editar</button>
           <button type="button" class="secundario" onclick="eliminarPrestamo('${p['ID']}')">Eliminar</button>
@@ -2331,7 +2332,17 @@
       const fecha = h['Fecha'] ? new Date(h['Fecha']).toLocaleDateString('es-DO') : '';
       const monto = parseFloat(h['Monto']) || 0;
       const balanceDespues = parseFloat(h['Balance despues']) || 0;
+      const esAjuste = h['Ajuste'] === 'Si' || h['Ajuste'] === true;
       const esAdelanto = h['Adelanto'] === 'Si' || h['Adelanto'] === true;
+
+      if (esAjuste) {
+        const signo = monto >= 0 ? '+' : '';
+        return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
+          <span>${fecha} <span class="badge-alerta prealerta">Ajuste de balance</span></span>
+          <span class="cifra">${signo}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})} · quedó RD$${balanceDespues.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>`;
+      }
+
       const etiquetaAdelanto = esAdelanto ? ' <span class="badge-alerta prealerta">Adelanto</span>' : '';
       return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
         <span>${fecha}${etiquetaAdelanto}</span>
@@ -2476,6 +2487,47 @@
       boton.disabled = false;
     }
     return false;
+  }
+
+  // Corrige el balance a un valor real (ej. el banco redistribuyo intereses),
+  // sin tocar ningun pago ya registrado — queda como un "Ajuste" aparte en el historial.
+  async function ajustarBalancePrestamo(id) {
+    const prestamo = prestamosCache.find(p => String(p['ID']) === String(id));
+    if (!prestamo) return;
+
+    const balanceActual = parseFloat(prestamo['Balance pendiente']) || 0;
+    const respuesta = prompt(
+      '¿Cuál es el balance REAL de "' + prestamo['Nombre'] + '" según tu banco? (RD$)',
+      balanceActual.toFixed(2)
+    );
+    if (respuesta === null) return;
+    const nuevoBalance = parseFloat(respuesta);
+    if (isNaN(nuevoBalance) || nuevoBalance < 0) {
+      mostrarMensaje('El valor ingresado no es válido', 'error');
+      return;
+    }
+    if (Math.abs(nuevoBalance - balanceActual) < 0.01) {
+      mostrarMensaje('El balance ya está correcto, no se registró ningún ajuste', 'ok');
+      return;
+    }
+
+    try {
+      const resp = await llamarAPI('ajustarBalancePrestamo', { id: id, nuevoBalance: nuevoBalance });
+      if (resp.ok) {
+        mostrarMensaje('Balance ajustado correctamente', 'ok');
+        await cargarPrestamos();
+        await cargarHistorialPagos();
+        const contHistorial = document.getElementById('historial-' + id);
+        if (contHistorial && contHistorial.style.display === 'block') {
+          renderizarHistorialPrestamo(id);
+        }
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al ajustar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo ajustar: ' + err.message, 'error');
+    }
   }
 
   async function aplicarPagoPrestamo() {
