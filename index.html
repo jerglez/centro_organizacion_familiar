@@ -553,6 +553,20 @@
   .barra-categoria .relleno.prealerta { background: var(--mango); }
   .barra-categoria .relleno.alerta { background: #C8763E; }
   .barra-categoria .relleno.exceso { background: var(--coral); }
+
+  /* ---------- Reportes ---------- */
+  .barra-mes { margin-bottom: 1rem; }
+  .barra-mes .etiqueta-mes { font-size: 0.8rem; font-weight: 600; margin-bottom: 4px; }
+  .barra-mes .fila-doble { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .barra-mes .fila-doble .nombre { width: 62px; font-size: 0.72rem; color: var(--texto-secundario); flex-shrink: 0; }
+  .barra-mes .fila-doble .pista { flex: 1; background: var(--fondo); border-radius: 6px; height: 10px; overflow: hidden; }
+  .barra-mes .fila-doble .relleno { height: 100%; border-radius: 6px; }
+  .barra-mes .fila-doble .valor { width: 90px; text-align: right; font-size: 0.75rem; flex-shrink: 0; }
+  .barra-patrimonio { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .barra-patrimonio .etiqueta-mes { width: 55px; font-size: 0.75rem; color: var(--texto-secundario); flex-shrink: 0; }
+  .barra-patrimonio .pista { flex: 1; background: var(--fondo); border-radius: 6px; height: 12px; overflow: hidden; }
+  .barra-patrimonio .relleno { height: 100%; border-radius: 6px; background: var(--teal); }
+  .barra-patrimonio .valor { width: 100px; text-align: right; font-size: 0.78rem; font-weight: 600; flex-shrink: 0; }
   .badge-alerta {
     font-size: 0.66rem;
     font-weight: 700;
@@ -702,8 +716,8 @@
     </div>
 
     <div class="menu-grupo">OTROS</div>
-    <div class="menu-item proximamente">
-      <span class="punto punto-gris"></span>Reportes <em>(próximamente)</em>
+    <div class="menu-item" data-panel="reportes" onclick="mostrarSeccion('reportes')">
+      <span class="punto punto-gris"></span>Reportes
     </div>
     <div class="menu-item" data-panel="usuarios" onclick="mostrarSeccion('usuarios')">
       <span class="punto punto-gris"></span>Usuarios
@@ -1153,6 +1167,42 @@
   </section>
   </div>
 
+  <div class="panel" id="panel-reportes">
+  <section class="bloque">
+    <h3>Reportes</h3>
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-reporte="categorias" onclick="cambiarVistaReporte('categorias')">Gastos por categoría</button>
+      <button type="button" class="filtro-btn" data-reporte="ingresosgastos" onclick="cambiarVistaReporte('ingresosgastos')">Ingresos vs Gastos</button>
+      <button type="button" class="filtro-btn" data-reporte="patrimonio" onclick="cambiarVistaReporte('patrimonio')">Patrimonio neto</button>
+      <button type="button" class="filtro-btn" data-reporte="anual" onclick="cambiarVistaReporte('anual')">Resumen anual</button>
+    </div>
+
+    <div class="vista-reporte" id="reporte-categorias">
+      <div class="campo-ancho" style="margin-bottom:1rem;">
+        <label for="reporte-campo-categoria" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Categoría de gasto</label>
+        <select id="reporte-campo-categoria" onchange="renderizarReporteCategorias()" style="width:100%; padding:0.55rem 0.6rem; border-radius:8px; border:1px solid var(--borde);"></select>
+      </div>
+      <div id="chart-reporte-categorias"><p class="vacio">Cargando...</p></div>
+    </div>
+
+    <div class="vista-reporte" id="reporte-ingresosgastos" style="display:none;">
+      <div id="chart-reporte-ingresosgastos"><p class="vacio">Cargando...</p></div>
+    </div>
+
+    <div class="vista-reporte" id="reporte-patrimonio" style="display:none;">
+      <div id="chart-reporte-patrimonio"><p class="vacio">Cargando...</p></div>
+    </div>
+
+    <div class="vista-reporte" id="reporte-anual" style="display:none;">
+      <div class="campo-ancho" style="margin-bottom:1rem;">
+        <label for="reporte-campo-anio" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Año</label>
+        <select id="reporte-campo-anio" onchange="renderizarReporteAnual()" style="width:100%; padding:0.55rem 0.6rem; border-radius:8px; border:1px solid var(--borde);"></select>
+      </div>
+      <div id="chart-reporte-anual"><p class="vacio">Cargando...</p></div>
+    </div>
+  </section>
+  </div>
+
   <div class="panel" id="panel-listacompras">
   <section class="bloque">
     <h3>Lista de compras</h3>
@@ -1297,7 +1347,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "11.4";
+  const VERSION_APP = "12.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2614,6 +2664,7 @@
     renderizarPresupuestosDashboard();
     renderizarUltimosMovimientos();
     renderizarListaTransacciones();
+    renderizarReportes();
   }
 
   // ---------- Filtro de la lista de movimientos (Todos / Ultima semana / Mes) ----------
@@ -2746,14 +2797,59 @@
       const fila = document.createElement('div');
       fila.className = 'barra-categoria';
       fila.innerHTML = `
-        <div class="fila-etiqueta">
+        <div class="fila-etiqueta" style="cursor:pointer;" title="Clic para ver los movimientos de esta categoría">
           <span>${cat}</span>
           <span class="cifra">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
         <div class="pista"><div class="relleno" style="width:${pct}%"></div></div>
+        <div class="detalle-gasto-cat" style="display:none; margin-top:6px; padding-top:6px; border-top:1px solid var(--borde);"></div>
       `;
+
+      // Se usa addEventListener (en vez de onclick con el texto de la categoria
+      // incrustado) para no tener problemas si el nombre de una categoria
+      // llegara a tener un apostrofe u otro caracter especial.
+      const etiqueta = fila.querySelector('.fila-etiqueta');
+      const detalleDiv = fila.querySelector('.detalle-gasto-cat');
+      etiqueta.addEventListener('click', () => {
+        const abrir = detalleDiv.style.display !== 'block';
+        if (abrir) {
+          renderizarDetalleGastoCategoria(detalleDiv, cat);
+          detalleDiv.style.display = 'block';
+        } else {
+          detalleDiv.style.display = 'none';
+        }
+      });
+
       cont.appendChild(fila);
     });
+  }
+
+  // Lista los movimientos de gasto de este mes para una categoria especifica
+  function renderizarDetalleGastoCategoria(cont, categoria) {
+    const ahora = new Date();
+    const mes = ahora.getMonth(), anio = ahora.getFullYear();
+
+    const items = transaccionesCache.filter(t => {
+      if (t['Tipo (ingreso/gasto)'] !== 'gasto') return false;
+      if ((t['Categoria'] || 'Sin categoría') !== categoria) return false;
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      return f && f.getMonth() === mes && f.getFullYear() === anio;
+    }).sort((a, b) => new Date(b['Fecha']) - new Date(a['Fecha']));
+
+    if (items.length === 0) {
+      cont.innerHTML = '<p class="vacio">Sin movimientos este mes</p>';
+      return;
+    }
+
+    cont.innerHTML = items.map(t => {
+      const fecha = t['Fecha'] ? new Date(t['Fecha']).toLocaleDateString('es-DO') : '';
+      const monto = parseFloat(t['Monto']) || 0;
+      const detalleTexto = t['Descripcion'] || t['Comercio'] || '(sin descripción)';
+      return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
+        <span>${detalleTexto} · ${fecha}</span>
+        <span class="cifra">-RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      </div>`;
+    }).join('');
   }
 
   // ---------- Dashboard: presupuesto por categoria ----------
@@ -3900,6 +3996,295 @@
     } catch (err) {
       mostrarMensaje('No se pudo agregar al inventario: ' + err.message, 'error');
     }
+  }
+
+  // ---------- Reportes ----------
+
+  function cambiarVistaReporte(valor) {
+    document.querySelectorAll('.filtro-btn[data-reporte]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.reporte === valor);
+    });
+    document.querySelectorAll('.vista-reporte').forEach(v => v.style.display = 'none');
+    document.getElementById('reporte-' + valor).style.display = 'block';
+
+    if (valor === 'categorias') renderizarReporteCategorias();
+    else if (valor === 'ingresosgastos') renderizarReporteIngresosGastos();
+    else if (valor === 'patrimonio') renderizarReportePatrimonio();
+    else if (valor === 'anual') renderizarReporteAnual();
+  }
+
+  // Devuelve los ultimos n meses (el actual incluido), del mas viejo al mas nuevo
+  function obtenerUltimosMeses(n) {
+    const resultado = [];
+    const ahora = new Date();
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
+      resultado.push({
+        mes: d.getMonth(),
+        anio: d.getFullYear(),
+        etiqueta: d.toLocaleDateString('es-DO', { month: 'short', year: '2-digit' })
+      });
+    }
+    return resultado;
+  }
+
+  function totalesDelMes(mes, anio) {
+    let ingresos = 0, gastos = 0;
+    transaccionesCache.forEach(t => {
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!f || f.getMonth() !== mes || f.getFullYear() !== anio) return;
+      const monto = parseFloat(t['Monto']) || 0;
+      if (t['Tipo (ingreso/gasto)'] === 'ingreso') ingresos += monto; else gastos += monto;
+    });
+    return { ingresos, gastos };
+  }
+
+  function gastoDeCategoriaEnMes(categoria, mes, anio) {
+    let total = 0;
+    transaccionesCache.forEach(t => {
+      if (t['Tipo (ingreso/gasto)'] !== 'gasto') return;
+      if ((t['Categoria'] || 'Sin categoría') !== categoria) return;
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!f || f.getMonth() !== mes || f.getFullYear() !== anio) return;
+      total += parseFloat(t['Monto']) || 0;
+    });
+    return total;
+  }
+
+  // Igual que calcularSaldoCuenta, pero solo contando movimientos hasta una
+  // fecha limite — para poder reconstruir el saldo "como estaba" en el pasado.
+  function calcularSaldoCuentaEnFecha(nombreCuenta, fechaLimite) {
+    const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    const esPasivo = cuenta && cuenta['Tipo'] === 'Tarjeta de credito';
+    let saldo = cuenta ? (parseFloat(cuenta['Saldo inicial']) || 0) : 0;
+
+    transaccionesCache.forEach(t => {
+      if (t['Cuenta'] !== nombreCuenta) return;
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!f || f > fechaLimite) return;
+      const monto = parseFloat(t['Monto']) || 0;
+      const esIngreso = t['Tipo (ingreso/gasto)'] === 'ingreso';
+      saldo += esPasivo ? (esIngreso ? -monto : monto) : (esIngreso ? monto : -monto);
+    });
+
+    transferenciasCache.forEach(tr => {
+      const f = tr['Fecha'] ? new Date(tr['Fecha']) : null;
+      if (!f || f > fechaLimite) return;
+      const monto = parseFloat(tr['Monto']) || 0;
+      if (esPasivo) {
+        if (tr['Cuenta destino'] === nombreCuenta) saldo -= monto;
+        if (tr['Cuenta origen'] === nombreCuenta) saldo += monto;
+      } else {
+        if (tr['Cuenta origen'] === nombreCuenta) saldo -= monto;
+        if (tr['Cuenta destino'] === nombreCuenta) saldo += monto;
+      }
+    });
+    return saldo;
+  }
+
+  // Patrimonio neto = todo lo que tienes (Ahorro/Debito/Inversion/Efectivo) menos
+  // todo lo que debes (Tarjetas de credito), tal como estaba en una fecha dada.
+  function patrimonioNetoEnFecha(fechaLimite) {
+    let patrimonio = 0;
+    cuentasCache.forEach(c => {
+      const saldo = calcularSaldoCuentaEnFecha(c['Nombre'], fechaLimite);
+      patrimonio += (c['Tipo'] === 'Tarjeta de credito') ? -saldo : saldo;
+    });
+    return patrimonio;
+  }
+
+  // ---- Vista 1: Gastos por categoria, mes a mes ----
+  function poblarSelectReporteCategorias() {
+    const select = document.getElementById('reporte-campo-categoria');
+    const valorPrevio = select.value;
+    const categoriasGasto = categoriasCache.filter(c => c['Tipo (ingreso/gasto)'] === 'gasto');
+    select.innerHTML = '';
+    categoriasGasto.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c['Nombre'];
+      opt.textContent = c['Nombre'];
+      select.appendChild(opt);
+    });
+    if (valorPrevio && categoriasGasto.some(c => c['Nombre'] === valorPrevio)) {
+      select.value = valorPrevio;
+    }
+  }
+
+  function renderizarReporteCategorias() {
+    const cont = document.getElementById('chart-reporte-categorias');
+    const categoria = document.getElementById('reporte-campo-categoria').value;
+    if (!categoria) {
+      cont.innerHTML = '<p class="vacio">Crea al menos una categoría de gasto para ver este reporte</p>';
+      return;
+    }
+
+    const meses = obtenerUltimosMeses(6);
+    const valores = meses.map(m => gastoDeCategoriaEnMes(categoria, m.mes, m.anio));
+    const max = Math.max(...valores, 1);
+
+    cont.innerHTML = '';
+    meses.forEach((m, i) => {
+      const pct = (valores[i] / max) * 100;
+      const fila = document.createElement('div');
+      fila.className = 'barra-mes';
+      fila.innerHTML = `
+        <div class="fila-doble">
+          <span class="nombre">${m.etiqueta}</span>
+          <div class="pista"><div class="relleno" style="width:${pct}%; background:var(--coral);"></div></div>
+          <span class="valor cifra">RD$${valores[i].toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+      `;
+      cont.appendChild(fila);
+    });
+  }
+
+  // ---- Vista 2: Ingresos vs Gastos a lo largo del tiempo ----
+  function renderizarReporteIngresosGastos() {
+    const cont = document.getElementById('chart-reporte-ingresosgastos');
+    const meses = obtenerUltimosMeses(6);
+    const datos = meses.map(m => totalesDelMes(m.mes, m.anio));
+    const max = Math.max(...datos.map(d => Math.max(d.ingresos, d.gastos)), 1);
+
+    cont.innerHTML = '';
+    meses.forEach((m, i) => {
+      const { ingresos, gastos } = datos[i];
+      const bloque = document.createElement('div');
+      bloque.className = 'barra-mes';
+      bloque.innerHTML = `
+        <div class="etiqueta-mes">${m.etiqueta}</div>
+        <div class="fila-doble">
+          <span class="nombre">Ingresos</span>
+          <div class="pista"><div class="relleno" style="width:${(ingresos/max*100)}%; background:var(--verde);"></div></div>
+          <span class="valor cifra">RD$${ingresos.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div class="fila-doble">
+          <span class="nombre">Gastos</span>
+          <div class="pista"><div class="relleno" style="width:${(gastos/max*100)}%; background:var(--coral);"></div></div>
+          <span class="valor cifra">RD$${gastos.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+      `;
+      cont.appendChild(bloque);
+    });
+  }
+
+  // ---- Vista 3: Evolucion del patrimonio neto ----
+  function renderizarReportePatrimonio() {
+    const cont = document.getElementById('chart-reporte-patrimonio');
+    const meses = obtenerUltimosMeses(6);
+    const valores = meses.map(m => {
+      const finDeMes = new Date(m.anio, m.mes + 1, 0, 23, 59, 59);
+      return patrimonioNetoEnFecha(finDeMes);
+    });
+    const max = Math.max(...valores.map(v => Math.abs(v)), 1);
+
+    cont.innerHTML = '';
+    meses.forEach((m, i) => {
+      const valor = valores[i];
+      const pct = (Math.abs(valor) / max) * 100;
+      const fila = document.createElement('div');
+      fila.className = 'barra-patrimonio';
+      fila.innerHTML = `
+        <span class="etiqueta-mes">${m.etiqueta}</span>
+        <div class="pista"><div class="relleno" style="width:${pct}%; ${valor < 0 ? 'background:var(--coral);' : ''}"></div></div>
+        <span class="valor cifra" style="${valor < 0 ? 'color:var(--coral);' : ''}">RD$${valor.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      `;
+      cont.appendChild(fila);
+    });
+  }
+
+  // ---- Vista 4: Resumen anual ----
+  function poblarSelectReporteAnio() {
+    const select = document.getElementById('reporte-campo-anio');
+    const valorPrevio = select.value;
+    const anios = new Set();
+    transaccionesCache.forEach(t => {
+      if (t['Fecha']) anios.add(new Date(t['Fecha']).getFullYear());
+    });
+    anios.add(new Date().getFullYear());
+    const listaAnios = Array.from(anios).sort((a, b) => b - a);
+
+    select.innerHTML = '';
+    listaAnios.forEach(anio => {
+      const opt = document.createElement('option');
+      opt.value = anio;
+      opt.textContent = anio;
+      select.appendChild(opt);
+    });
+    if (valorPrevio && listaAnios.includes(parseInt(valorPrevio, 10))) {
+      select.value = valorPrevio;
+    }
+  }
+
+  function renderizarReporteAnual() {
+    const cont = document.getElementById('chart-reporte-anual');
+    const anio = parseInt(document.getElementById('reporte-campo-anio').value, 10);
+    if (!anio) { cont.innerHTML = '<p class="vacio">Sin datos</p>'; return; }
+
+    let totalIngresos = 0, totalGastos = 0;
+    const porCategoria = {};
+    const porMes = Array.from({ length: 12 }, () => 0);
+
+    transaccionesCache.forEach(t => {
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!f || f.getFullYear() !== anio) return;
+      const monto = parseFloat(t['Monto']) || 0;
+      if (t['Tipo (ingreso/gasto)'] === 'ingreso') {
+        totalIngresos += monto;
+      } else {
+        totalGastos += monto;
+        porMes[f.getMonth()] += monto;
+        const cat = t['Categoria'] || 'Sin categoría';
+        porCategoria[cat] = (porCategoria[cat] || 0) + monto;
+      }
+    });
+
+    const ahorroNeto = totalIngresos - totalGastos;
+    const promedioMensual = totalGastos / 12;
+    const topCategorias = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+    let mesMayorGasto = 0, mesMenorGasto = 0;
+    porMes.forEach((v, i) => {
+      if (v > porMes[mesMayorGasto]) mesMayorGasto = i;
+      if (v > 0 && (porMes[mesMenorGasto] === 0 || v < porMes[mesMenorGasto])) mesMenorGasto = i;
+    });
+    const nombreMes = (i) => new Date(anio, i, 1).toLocaleDateString('es-DO', { month: 'long' });
+
+    cont.innerHTML = `
+      <div class="resumen" style="margin-bottom:1.25rem;">
+        <div class="tarjeta ingresos">
+          <span class="label">Ingresos ${anio}</span>
+          <span class="valor">RD$${totalIngresos.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div class="tarjeta gastos">
+          <span class="label">Gastos ${anio}</span>
+          <span class="valor">RD$${totalGastos.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div class="tarjeta saldo">
+          <span class="label">Ahorro neto</span>
+          <span class="valor">RD$${ahorroNeto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+      </div>
+      <p class="detalle" style="margin-bottom:1rem;">Gasto promedio mensual: <strong class="cifra">RD$${promedioMensual.toLocaleString('es-DO', {minimumFractionDigits:2})}</strong></p>
+      <p class="detalle" style="margin-bottom:1rem;">Mes con más gasto: <strong>${nombreMes(mesMayorGasto)}</strong> · Mes con menos gasto: <strong>${nombreMes(mesMenorGasto)}</strong></p>
+      <h3 style="font-size:0.9rem; margin-bottom:0.5rem;">Top 3 categorías de gasto</h3>
+      ${topCategorias.length === 0 ? '<p class="vacio">Sin gastos registrados este año</p>' : topCategorias.map(([cat, monto]) => `
+        <div class="barra-categoria">
+          <div class="fila-etiqueta"><span>${cat}</span><span class="cifra">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span></div>
+          <div class="pista"><div class="relleno" style="width:${(monto/topCategorias[0][1]*100)}%"></div></div>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function renderizarReportes() {
+    poblarSelectReporteCategorias();
+    poblarSelectReporteAnio();
+    const vistaActiva = document.querySelector('.filtro-btn[data-reporte].activo');
+    const valor = vistaActiva ? vistaActiva.dataset.reporte : 'categorias';
+    if (valor === 'categorias') renderizarReporteCategorias();
+    else if (valor === 'ingresosgastos') renderizarReporteIngresosGastos();
+    else if (valor === 'patrimonio') renderizarReportePatrimonio();
+    else if (valor === 'anual') renderizarReporteAnual();
   }
 
   function cerrarSesion() {
