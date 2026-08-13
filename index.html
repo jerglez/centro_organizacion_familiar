@@ -258,9 +258,7 @@
     justify-content: center;
   }
   #panel-notificaciones {
-    position: absolute;
-    top: 42px;
-    right: 0;
+    position: fixed;
     width: 300px;
     max-width: 85vw;
     background: var(--superficie);
@@ -276,6 +274,15 @@
     color: var(--texto-secundario);
     padding: 0.6rem 0.8rem 0.2rem;
   }
+  .grupo-tipo-cuenta {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--teal-oscuro);
+    padding: 0.85rem 0 0.5rem;
+    margin-top: 0.4rem;
+    border-bottom: 2px solid var(--teal-claro);
+  }
+  .grupo-tipo-cuenta:first-child { margin-top: 0; }
   .notif-item {
     display: flex;
     justify-content: space-between;
@@ -580,14 +587,6 @@
 
     /* El panel de notificaciones se ancla al viewport, no al pequeno boton
        de la campana — asi siempre cabe completo en la pantalla del celular. */
-    #panel-notificaciones {
-      position: fixed;
-      top: max(64px, calc(env(safe-area-inset-top) + 54px));
-      left: max(12px, env(safe-area-inset-left));
-      right: max(12px, env(safe-area-inset-right));
-      width: auto;
-      max-width: none;
-    }
     #lista-notificaciones { max-height: 60vh; }
 
     .resumen { gap: 0.5rem; }
@@ -809,6 +808,19 @@
       <button type="button" class="filtro-btn activo" data-filtro="todos" onclick="cambiarFiltroMovimientos('todos')">Todos</button>
       <button type="button" class="filtro-btn" data-filtro="semana" onclick="cambiarFiltroMovimientos('semana')">Última semana</button>
       <button type="button" class="filtro-btn" data-filtro="mes" onclick="cambiarFiltroMovimientos('mes')">Este mes</button>
+      <button type="button" class="filtro-btn" data-filtro="rango" onclick="cambiarFiltroMovimientos('rango')">Rango</button>
+    </div>
+    <div id="rango-movimientos" class="campo-ancho" style="display:none; margin-bottom:0.9rem;">
+      <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-end;">
+        <div>
+          <label for="rango-mov-desde" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Desde</label>
+          <input type="date" id="rango-mov-desde" onchange="renderizarListaTransacciones()">
+        </div>
+        <div>
+          <label for="rango-mov-hasta" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Hasta</label>
+          <input type="date" id="rango-mov-hasta" onchange="renderizarListaTransacciones()">
+        </div>
+      </div>
     </div>
     <ul id="lista-transacciones">
       <li class="vacio">Cargando...</li>
@@ -1283,7 +1295,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "11.1";
+  const VERSION_APP = "11.2";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1780,8 +1792,7 @@
         if (delTipo.length === 0) return;
 
         const encabezado = document.createElement('div');
-        encabezado.className = 'notif-grupo';
-        encabezado.style.padding = '0.6rem 0';
+        encabezado.className = 'grupo-tipo-cuenta';
         encabezado.textContent = ETIQUETAS_TIPOS[tipo] + ' (' + delTipo.length + ')';
         lista.appendChild(encabezado);
 
@@ -2534,10 +2545,14 @@
 
   // ---------- Filtro de la lista de movimientos (Todos / Ultima semana / Mes) ----------
   let filtroMovimientos = 'todos';
+  const MOVIMIENTOS_POR_PAGINA = 20;
+  let movimientosMostrados = MOVIMIENTOS_POR_PAGINA;
 
   function cambiarFiltroMovimientos(valor) {
     filtroMovimientos = valor;
-    document.querySelectorAll('.filtro-btn').forEach(b => b.classList.toggle('activo', b.dataset.filtro === valor));
+    movimientosMostrados = MOVIMIENTOS_POR_PAGINA; // reiniciar la paginacion al cambiar de filtro
+    document.querySelectorAll('.filtro-btn[data-filtro]').forEach(b => b.classList.toggle('activo', b.dataset.filtro === valor));
+    document.getElementById('rango-movimientos').style.display = valor === 'rango' ? 'block' : 'none';
     renderizarListaTransacciones();
   }
 
@@ -2553,20 +2568,43 @@
     if (filtroMovimientos === 'mes') {
       return fecha.getMonth() === ahora.getMonth() && fecha.getFullYear() === ahora.getFullYear();
     }
+    if (filtroMovimientos === 'rango') {
+      const desdeTexto = document.getElementById('rango-mov-desde').value;
+      const hastaTexto = document.getElementById('rango-mov-hasta').value;
+      if (desdeTexto && fecha < new Date(desdeTexto)) return false;
+      if (hastaTexto && fecha > new Date(hastaTexto + 'T23:59:59')) return false;
+      return true;
+    }
     return true;
+  }
+
+  function verMasMovimientos() {
+    movimientosMostrados += MOVIMIENTOS_POR_PAGINA;
+    renderizarListaTransacciones();
   }
 
   function renderizarListaTransacciones() {
     const lista = document.getElementById('lista-transacciones');
     lista.innerHTML = '';
     const ordenados = transaccionesCache.slice().reverse();
-    let mostrados = 0;
 
-    ordenados.forEach(t => {
+    // Primero se filtra TODO el conjunto, y solo despues se corta a la
+    // cantidad visible — asi "Ver mas" siempre revela los siguientes
+    // movimientos correctos, no una pagina fija del total sin filtrar.
+    const filtrados = ordenados.filter(t => {
       const fechaTransaccion = t['Fecha'] ? new Date(t['Fecha']) : null;
-      if (!cumpleFiltroMovimientos(fechaTransaccion)) return;
-      mostrados++;
+      return cumpleFiltroMovimientos(fechaTransaccion);
+    });
 
+    if (filtrados.length === 0) {
+      lista.innerHTML = '<li class="vacio">No hay movimientos en este período</li>';
+      return;
+    }
+
+    const visibles = filtrados.slice(0, movimientosMostrados);
+
+    visibles.forEach(t => {
+      const fechaTransaccion = t['Fecha'] ? new Date(t['Fecha']) : null;
       const tipo = t['Tipo (ingreso/gasto)'];
       const monto = parseFloat(t['Monto']) || 0;
       const li = document.createElement('li');
@@ -2589,8 +2627,12 @@
       lista.appendChild(li);
     });
 
-    if (mostrados === 0) {
-      lista.innerHTML = '<li class="vacio">No hay movimientos en este período</li>';
+    if (filtrados.length > movimientosMostrados) {
+      const restantes = filtrados.length - movimientosMostrados;
+      const liVerMas = document.createElement('li');
+      liVerMas.style.justifyContent = 'center';
+      liVerMas.innerHTML = `<button type="button" class="secundario" onclick="verMasMovimientos()">Ver ${Math.min(restantes, MOVIMIENTOS_POR_PAGINA)} más (quedan ${restantes})</button>`;
+      lista.appendChild(liVerMas);
     }
   }
 
@@ -3378,7 +3420,24 @@
 
   function toggleCampanaNotificaciones() {
     const panel = document.getElementById('panel-notificaciones');
-    panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    const seVaAbrir = panel.style.display !== 'block';
+
+    if (seVaAbrir) {
+      const boton = document.querySelector('.btn-campana');
+      const rect = boton.getBoundingClientRect();
+      const margen = 12;
+      const anchoPanel = Math.min(300, window.innerWidth - margen * 2);
+
+      panel.style.width = anchoPanel + 'px';
+      panel.style.top = (rect.bottom + 8) + 'px'; // siempre DEBAJO de la campana, sin importar el dispositivo
+      let izquierda = rect.right - anchoPanel; // alineado al borde derecho de la campana
+      if (izquierda < margen) izquierda = margen; // pero sin salirse de la pantalla por la izquierda
+      panel.style.left = izquierda + 'px';
+      panel.style.right = 'auto';
+      panel.style.display = 'block';
+    } else {
+      panel.style.display = 'none';
+    }
   }
 
   // Quita esta notificacion de la vista actual. No es permanente en el servidor
