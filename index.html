@@ -48,7 +48,11 @@
     background: var(--fondo);
     color: var(--texto);
     min-height: 100vh;
-    padding: 1.25rem;
+    /* En iPhone instalado como PWA, el contenido puede dibujarse debajo del
+       notch/reloj (por viewport-fit=cover). env(safe-area-inset-*) reserva
+       ese espacio automaticamente; en Android/navegador normal vale 0. */
+    padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+             max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
   }
   .cifra {
     font-family: 'IBM Plex Mono', ui-monospace, monospace;
@@ -139,7 +143,7 @@
     max-width: 80vw;
     background: var(--superficie);
     z-index: 50;
-    padding: 1.25rem 0.75rem;
+    padding: max(1.25rem, env(safe-area-inset-top)) 0.75rem max(1.25rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
     transform: translateX(-100%);
     transition: transform 0.25s ease;
     overflow-y: auto;
@@ -564,7 +568,10 @@
 
   /* ---------- Ajustes para pantallas de celular ---------- */
   @media (max-width: 480px) {
-    body { padding: 0.75rem; }
+    body {
+      padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+               max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
+    }
 
     #login-screen { margin-top: 2.5rem; padding: 1.5rem 1.25rem; }
 
@@ -575,9 +582,9 @@
        de la campana — asi siempre cabe completo en la pantalla del celular. */
     #panel-notificaciones {
       position: fixed;
-      top: 64px;
-      left: 12px;
-      right: 12px;
+      top: max(64px, calc(env(safe-area-inset-top) + 54px));
+      left: max(12px, env(safe-area-inset-left));
+      right: max(12px, env(safe-area-inset-right));
       width: auto;
       max-width: none;
     }
@@ -1276,7 +1283,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "11.0";
+  const VERSION_APP = "11.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1336,6 +1343,11 @@
         document.getElementById('form-usuario').style.display = 'grid';
       } else {
         document.getElementById('usuarios-nota-permiso').style.display = 'block';
+      }
+
+      // Pedir permiso de notificaciones (una sola vez; si ya lo negaste antes, no vuelve a insistir)
+      if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
       }
 
       await sincronizarDatos();
@@ -3276,11 +3288,43 @@
   }
 
   // ---------- Campana de novedades ----------
+  let idsNotificadosLocalmente = new Set();
+  let primeraCargaNotificaciones = true;
+
   async function cargarNotificaciones() {
     const resp = await llamarAPI('getNotificaciones');
     if (resp.ok) {
       notificacionesCache = resp.datos || [];
       renderizarNotificaciones();
+
+      if (primeraCargaNotificaciones) {
+        // Al abrir la app, no se notifica lo que ya estaba pendiente de antes —
+        // solo se registran como "ya vistas" para detectar lo nuevo despues.
+        notificacionesCache.forEach(n => idsNotificadosLocalmente.add(String(n['ID'])));
+        primeraCargaNotificaciones = false;
+        return;
+      }
+
+      notificacionesCache.forEach(n => {
+        const id = String(n['ID']);
+        if (!idsNotificadosLocalmente.has(id)) {
+          idsNotificadosLocalmente.add(id);
+          mostrarNotificacionSistema(n);
+        }
+      });
+    }
+  }
+
+  function mostrarNotificacionSistema(n) {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    try {
+      new Notification('Centro Familiar · ' + (n['Modulo'] || 'Novedad'), {
+        body: n['Descripcion'] + ' — ' + n['Usuario'],
+        icon: 'icon-192.png',
+        tag: 'novedad-' + n['ID'] // evita duplicados si se dispara dos veces
+      });
+    } catch (err) {
+      console.log('No se pudo mostrar la notificación:', err);
     }
   }
 
@@ -3728,6 +3772,8 @@
 
   function cerrarSesion() {
     tokenActual = null;
+    idsNotificadosLocalmente = new Set();
+    primeraCargaNotificaciones = true;
     if (intervaloSincronizacion) {
       clearInterval(intervaloSincronizacion);
       intervaloSincronizacion = null;
