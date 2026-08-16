@@ -366,7 +366,8 @@
   form#form-lista-compras,
   form#form-usuario,
   form#form-meta,
-  form#form-inventario { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-inventario,
+  form#form-cuentapagar { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
@@ -375,7 +376,8 @@
   form#form-lista-compras .campo-ancho,
   form#form-usuario .campo-ancho,
   form#form-meta .campo-ancho,
-  form#form-inventario .campo-ancho { grid-column: 1 / -1; }
+  form#form-inventario .campo-ancho,
+  form#form-cuentapagar .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
@@ -384,7 +386,8 @@
   form#form-lista-compras label,
   form#form-usuario label,
   form#form-meta label,
-  form#form-inventario label {
+  form#form-inventario label,
+  form#form-cuentapagar label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -407,7 +410,9 @@
   form#form-meta input,
   form#form-meta select,
   form#form-inventario input,
-  form#form-inventario select {
+  form#form-inventario select,
+  form#form-cuentapagar input,
+  form#form-cuentapagar select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -451,7 +456,8 @@
   #lista-compras-items,
   #lista-prestamos,
   #lista-metas,
-  #lista-inventario { list-style: none; margin: 0; padding: 0; }
+  #lista-inventario,
+  #lista-cuentaspagar { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
@@ -616,7 +622,8 @@
     form#form-lista-compras,
     form#form-usuario,
     form#form-meta,
-    form#form-inventario { grid-template-columns: 1fr; }
+    form#form-inventario,
+    form#form-cuentapagar { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -713,6 +720,9 @@
     </div>
     <div class="menu-item" data-panel="inventario" onclick="mostrarSeccion('inventario')">
       <span class="punto punto-mango"></span>Inventario
+    </div>
+    <div class="menu-item" data-panel="cuentaspagar" onclick="mostrarSeccion('cuentaspagar')">
+      <span class="punto punto-mango"></span>Cuentas por pagar
     </div>
 
     <div class="menu-grupo">OTROS</div>
@@ -835,6 +845,12 @@
           <input type="date" id="rango-mov-hasta" onchange="renderizarListaTransacciones()">
         </div>
       </div>
+    </div>
+    <div class="campo-ancho" style="margin-bottom:0.9rem; max-width:260px;">
+      <label for="filtro-mov-cuenta" style="display:block; font-size:0.78rem; color:var(--texto-secundario); margin-bottom:4px;">Cuenta</label>
+      <select id="filtro-mov-cuenta" onchange="cambiarFiltroCuentaMovimientos()" style="width:100%; padding:0.5rem 0.6rem; border-radius:8px; border:1px solid var(--borde);">
+        <option value="">Todas las cuentas</option>
+      </select>
     </div>
     <ul id="lista-transacciones">
       <li class="vacio">Cargando...</li>
@@ -1301,6 +1317,72 @@
   </section>
   </div>
 
+  <div class="panel" id="panel-cuentaspagar">
+  <section class="bloque">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:6px;">
+      <h3 style="margin:0;">Cuentas por pagar</h3>
+      <span class="cifra" style="color:var(--coral); font-weight:600;" id="valor-total-cuentaspagar">Total: RD$0</span>
+    </div>
+
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-cxp="activas" onclick="cambiarFiltroCuentasPorPagar('activas')">Activas</button>
+      <button type="button" class="filtro-btn" data-filtro-cxp="inactivas" onclick="cambiarFiltroCuentasPorPagar('inactivas')">Inactivas</button>
+    </div>
+
+    <ul id="lista-cuentaspagar" style="margin-bottom:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;"
+      onclick="cancelarEdicionCuentaPorPagar(); document.getElementById('cxp-form-contenedor').style.display='block'; document.getElementById('form-cuentapagar').scrollIntoView({behavior:'smooth'});">
+      + Nueva cuenta por pagar
+    </button>
+
+    <div id="cxp-form-contenedor" style="display:none;">
+    <form id="form-cuentapagar" onsubmit="return guardarCuentaPorPagar(event)">
+      <input type="hidden" id="cxp-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="cxp-campo-nombre">Nombre</label>
+        <input type="text" id="cxp-campo-nombre" placeholder="Ej. Edenorte" required>
+      </div>
+      <div>
+        <label for="cxp-campo-tipo">Tipo</label>
+        <select id="cxp-campo-tipo">
+          <option value="Servicio">Servicio</option>
+          <option value="Suscripcion">Suscripción</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div>
+        <label for="cxp-campo-monto">Monto estimado (RD$)</label>
+        <input type="number" id="cxp-campo-monto" step="0.01" min="0" required>
+      </div>
+      <div>
+        <label for="cxp-campo-corte">Día de corte (opcional)</label>
+        <input type="number" id="cxp-campo-corte" min="1" max="31">
+      </div>
+      <div>
+        <label for="cxp-campo-fecha">Próxima fecha de vencimiento</label>
+        <input type="date" id="cxp-campo-fecha" required>
+      </div>
+      <div class="campo-ancho">
+        <label for="cxp-campo-anticipacion">Avisar con cuántos días de anticipación</label>
+        <input type="number" id="cxp-campo-anticipacion" min="1" value="3">
+      </div>
+      <div class="campo-ancho">
+        <label for="cxp-campo-cuenta">Cuenta asociada (opcional)</label>
+        <select id="cxp-campo-cuenta"></select>
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="cxp-btn-guardar" style="flex:1;">Agregar cuenta por pagar</button>
+        <button type="button" class="secundario" id="cxp-btn-cancelar"
+          onclick="cancelarEdicionCuentaPorPagar(); document.getElementById('cxp-form-contenedor').style.display='none';" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+    </div>
+  </section>
+  </div>
+
   <div class="panel" id="panel-usuarios">
   <section class="bloque">
     <h3>Usuarios con acceso</h3>
@@ -1347,7 +1429,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "12.0";
+  const VERSION_APP = "13.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1448,7 +1530,8 @@
       elementoActivo.closest('#form-lista-compras') ||
       elementoActivo.closest('#form-usuario') ||
       elementoActivo.closest('#form-meta') ||
-      elementoActivo.closest('#form-inventario')
+      elementoActivo.closest('#form-inventario') ||
+      elementoActivo.closest('#form-cuentapagar')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
     if (escribiendoEnFormulario) return;
@@ -1465,6 +1548,7 @@
     await cargarNotificaciones();
     await cargarMetas();
     await cargarInventario();
+    await cargarCuentasPorPagar();
     actualizarUltimaSincronizacion();
   }
 
@@ -1888,13 +1972,73 @@
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
           <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
+          <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">Ver historial</button>
           <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
           ${botonCerrarReabrir}
           <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
         </div>
       </div>
+      <div id="historial-cuenta-${cuenta['ID']}" style="display:none; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
     `;
     return li;
+  }
+
+  function toggleHistorialCuenta(id) {
+    const cont = document.getElementById('historial-cuenta-' + id);
+    if (!cont) return;
+    const abrir = cont.style.display !== 'block';
+    if (abrir) {
+      const cuenta = cuentasCache.find(c => String(c['ID']) === String(id));
+      if (cuenta) renderizarHistorialCuenta(cont, cuenta['Nombre']);
+      cont.style.display = 'block';
+    } else {
+      cont.style.display = 'none';
+    }
+  }
+
+  // Junta transacciones y transferencias de una cuenta especifica, ordenadas
+  // por fecha, mas recientes primero. Se limita a las ultimas 15 para no
+  // sobrecargar la vista (para un historial mas completo, usa el filtro de
+  // Cuenta en Finanzas, que tiene paginacion "Ver mas").
+  function renderizarHistorialCuenta(cont, nombreCuenta) {
+    const movimientos = [];
+
+    transaccionesCache.forEach(t => {
+      if (t['Cuenta'] !== nombreCuenta) return;
+      movimientos.push({
+        fecha: t['Fecha'] ? new Date(t['Fecha']) : null,
+        texto: (t['Categoria'] || 'Sin categoría') + ' · ' + (t['Descripcion'] || t['Comercio'] || ''),
+        monto: parseFloat(t['Monto']) || 0,
+        tipo: t['Tipo (ingreso/gasto)']
+      });
+    });
+
+    transferenciasCache.forEach(tr => {
+      if (tr['Cuenta origen'] === nombreCuenta) {
+        movimientos.push({ fecha: tr['Fecha'] ? new Date(tr['Fecha']) : null, texto: 'Transferencia a ' + tr['Cuenta destino'], monto: parseFloat(tr['Monto']) || 0, tipo: 'gasto' });
+      }
+      if (tr['Cuenta destino'] === nombreCuenta) {
+        movimientos.push({ fecha: tr['Fecha'] ? new Date(tr['Fecha']) : null, texto: 'Transferencia desde ' + tr['Cuenta origen'], monto: parseFloat(tr['Monto']) || 0, tipo: 'ingreso' });
+      }
+    });
+
+    movimientos.sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+    const visibles = movimientos.slice(0, 15);
+
+    if (visibles.length === 0) {
+      cont.innerHTML = '<p class="vacio">Sin movimientos todavía</p>';
+      return;
+    }
+
+    cont.innerHTML = visibles.map(m => {
+      const fechaTexto = m.fecha ? m.fecha.toLocaleDateString('es-DO') : '';
+      const color = m.tipo === 'ingreso' ? 'var(--verde)' : 'var(--coral)';
+      const signo = m.tipo === 'ingreso' ? '+' : '-';
+      return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
+        <span>${m.texto} · ${fechaTexto}</span>
+        <span class="cifra" style="color:${color};">${signo}RD$${m.monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      </div>`;
+    }).join('');
   }
 
   // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
@@ -2707,7 +2851,29 @@
     renderizarListaTransacciones();
   }
 
+  let filtroCuentaMovimientos = '';
+
+  function cambiarFiltroCuentaMovimientos() {
+    filtroCuentaMovimientos = document.getElementById('filtro-mov-cuenta').value;
+    movimientosMostrados = MOVIMIENTOS_POR_PAGINA; // reiniciar la paginacion
+    renderizarListaTransacciones();
+  }
+
+  function poblarSelectFiltroCuentaMovimientos() {
+    const select = document.getElementById('filtro-mov-cuenta');
+    const valorPrevio = select.value;
+    select.innerHTML = '<option value="">Todas las cuentas</option>';
+    cuentasCache.forEach(cuenta => {
+      const opt = document.createElement('option');
+      opt.value = cuenta['Nombre'];
+      opt.textContent = cuenta['Nombre'];
+      select.appendChild(opt);
+    });
+    if (valorPrevio) select.value = valorPrevio;
+  }
+
   function renderizarListaTransacciones() {
+    poblarSelectFiltroCuentaMovimientos();
     const lista = document.getElementById('lista-transacciones');
     lista.innerHTML = '';
     const ordenados = transaccionesCache.slice().reverse();
@@ -2717,7 +2883,9 @@
     // movimientos correctos, no una pagina fija del total sin filtrar.
     const filtrados = ordenados.filter(t => {
       const fechaTransaccion = t['Fecha'] ? new Date(t['Fecha']) : null;
-      return cumpleFiltroMovimientos(fechaTransaccion);
+      if (!cumpleFiltroMovimientos(fechaTransaccion)) return false;
+      if (filtroCuentaMovimientos && t['Cuenta'] !== filtroCuentaMovimientos) return false;
+      return true;
     });
 
     if (filtrados.length === 0) {
@@ -2858,6 +3026,9 @@
   let metaEditandoId = null;
   let inventarioCache = [];
   let inventarioEditandoId = null;
+  let cuentasPorPagarCache = [];
+  let cuentaPorPagarEditandoId = null;
+  let filtroCuentasPorPagar = 'activas';
 
   async function cargarPresupuestos() {
     const resp = await llamarAPI('getPresupuestos');
@@ -4285,6 +4456,260 @@
     else if (valor === 'ingresosgastos') renderizarReporteIngresosGastos();
     else if (valor === 'patrimonio') renderizarReportePatrimonio();
     else if (valor === 'anual') renderizarReporteAnual();
+  }
+
+  // ---------- Cuentas por pagar ----------
+  async function cargarCuentasPorPagar() {
+    const resp = await llamarAPI('getCuentasPorPagar');
+    if (resp.ok) {
+      cuentasPorPagarCache = resp.datos || [];
+      poblarSelectCuentaCxp();
+      renderizarCuentasPorPagar();
+    }
+  }
+
+  function poblarSelectCuentaCxp() {
+    const select = document.getElementById('cxp-campo-cuenta');
+    const valorPrevio = select.value;
+    select.innerHTML = '<option value="">(preguntar al pagar)</option>';
+    cuentasCache.filter(esCuentaActiva).forEach(cuenta => {
+      const opt = document.createElement('option');
+      opt.value = cuenta['Nombre'];
+      opt.textContent = cuenta['Nombre'] + ' (' + cuenta['Tipo'] + ')';
+      select.appendChild(opt);
+    });
+    if (valorPrevio) select.value = valorPrevio;
+  }
+
+  function cambiarFiltroCuentasPorPagar(valor) {
+    filtroCuentasPorPagar = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-cxp]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.filtroCxp === valor);
+    });
+    renderizarCuentasPorPagar();
+  }
+
+  function esCuentaPorPagarActiva(c) {
+    return c['Activo'] === 'Si' || c['Activo'] === true || c['Activo'] === 'Sí' || !c['Activo'];
+  }
+
+  function renderizarCuentasPorPagar() {
+    const lista = document.getElementById('lista-cuentaspagar');
+    lista.innerHTML = '';
+
+    const activas = cuentasPorPagarCache.filter(esCuentaPorPagarActiva);
+    const totalActivo = activas.reduce((s, c) => s + (parseFloat(c['Monto estimado']) || 0), 0);
+    document.getElementById('valor-total-cuentaspagar').textContent =
+      'Total: RD$' + totalActivo.toLocaleString('es-DO', { minimumFractionDigits: 2 });
+
+    const filtradas = cuentasPorPagarCache.filter(c =>
+      filtroCuentasPorPagar === 'activas' ? esCuentaPorPagarActiva(c) : !esCuentaPorPagarActiva(c)
+    );
+
+    if (filtradas.length === 0) {
+      lista.innerHTML = filtroCuentasPorPagar === 'activas'
+        ? '<li class="vacio">No tienes cuentas por pagar activas</li>'
+        : '<li class="vacio">No tienes cuentas por pagar inactivas</li>';
+      return;
+    }
+
+    // Ordenar por fecha de vencimiento mas proxima primero
+    const ordenadas = filtradas.slice().sort((a, b) => {
+      const fa = a['Proxima fecha vencimiento'] ? new Date(a['Proxima fecha vencimiento']) : new Date(8640000000000000);
+      const fb = b['Proxima fecha vencimiento'] ? new Date(b['Proxima fecha vencimiento']) : new Date(8640000000000000);
+      return fa - fb;
+    });
+
+    ordenadas.forEach(c => {
+      const monto = parseFloat(c['Monto estimado']) || 0;
+      const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
+      const activa = esCuentaPorPagarActiva(c);
+      let etiqueta = '';
+
+      if (activa && proxima) {
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+        const diasRestantes = Math.ceil((proxima - hoy) / 86400000);
+        if (diasRestantes <= 2) {
+          etiqueta = ' <span class="badge-alerta exceso">' + (diasRestantes < 0 ? 'Vencido' : 'Alerta') + '</span>';
+        } else if (diasRestantes <= (parseInt(c['Dias de anticipacion'], 10) || 3)) {
+          etiqueta = ' <span class="badge-alerta prealerta">Pre-alerta</span>';
+        }
+      }
+      if (!activa) etiqueta = ' <span class="badge-alerta prealerta">Inactiva</span>';
+
+      const fechaTexto = proxima ? proxima.toLocaleDateString('es-DO') : 'Sin definir';
+      const botonPago = activa
+        ? `<button type="button" class="secundario" onclick="prepararPagoCuentaPorPagar('${c['ID']}')">Registrar pago</button>`
+        : '';
+      const botonActivar = activa
+        ? `<button type="button" class="secundario" onclick="toggleActivoCuentaPorPagar('${c['ID']}', false)">Desactivar</button>`
+        : `<button type="button" class="secundario" onclick="toggleActivoCuentaPorPagar('${c['ID']}', true)">Reactivar</button>`;
+
+      const li = document.createElement('li');
+      li.style.display = 'block';
+      li.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="item-info" style="cursor:pointer;" onclick="editarCuentaPorPagar('${c['ID']}')" title="Clic para ver y editar">
+            <div class="categoria">${c['Nombre']}${etiqueta}</div>
+            <div class="detalle">${c['Tipo'] || 'Servicio'} · vence: ${fechaTexto}${c['Cuenta asociada'] ? ' · ' + c['Cuenta asociada'] : ''}</div>
+          </div>
+          <span class="item-monto cifra gasto">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+          ${botonPago}
+          <button type="button" class="secundario" onclick="editarCuentaPorPagar('${c['ID']}')">Editar</button>
+          ${botonActivar}
+          <button type="button" class="secundario" onclick="eliminarCuentaPorPagar('${c['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  async function toggleActivoCuentaPorPagar(id, activarla) {
+    try {
+      const resp = await llamarAPI('toggleActivoCuentaPorPagar', { id: id, activo: activarla });
+      if (resp.ok) {
+        mostrarMensaje(activarla ? 'Reactivada' : 'Desactivada', 'ok');
+        await cargarCuentasPorPagar();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo actualizar: ' + err.message, 'error');
+    }
+  }
+
+  function editarCuentaPorPagar(id) {
+    const c = cuentasPorPagarCache.find(x => String(x['ID']) === String(id));
+    if (!c) return;
+    cuentaPorPagarEditandoId = id;
+    document.getElementById('cxp-campo-id').value = id;
+    document.getElementById('cxp-campo-nombre').value = c['Nombre'];
+    document.getElementById('cxp-campo-tipo').value = c['Tipo'] || 'Servicio';
+    document.getElementById('cxp-campo-monto').value = c['Monto estimado'] || 0;
+    document.getElementById('cxp-campo-corte').value = c['Dia de corte'] || '';
+    const fecha = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
+    document.getElementById('cxp-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('cxp-campo-anticipacion').value = c['Dias de anticipacion'] || 3;
+    document.getElementById('cxp-campo-cuenta').value = c['Cuenta asociada'] || '';
+    document.getElementById('cxp-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('cxp-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('cxp-form-contenedor').style.display = 'block';
+    document.getElementById('form-cuentapagar').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionCuentaPorPagar() {
+    cuentaPorPagarEditandoId = null;
+    document.getElementById('form-cuentapagar').reset();
+    document.getElementById('cxp-campo-id').value = '';
+    document.getElementById('cxp-btn-guardar').textContent = 'Agregar cuenta por pagar';
+    document.getElementById('cxp-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarCuentaPorPagar(id) {
+    if (!confirm('¿Eliminar esta cuenta por pagar?')) return;
+    try {
+      const resp = await llamarAPI('deleteCuentaPorPagar', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Eliminada', 'ok');
+        await cargarCuentasPorPagar();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarCuentaPorPagar(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('cxp-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      nombre: document.getElementById('cxp-campo-nombre').value.trim(),
+      tipo: document.getElementById('cxp-campo-tipo').value,
+      montoEstimado: parseFloat(document.getElementById('cxp-campo-monto').value) || 0,
+      diaCorte: document.getElementById('cxp-campo-corte').value,
+      proximaFecha: document.getElementById('cxp-campo-fecha').value,
+      diasAnticipacion: parseInt(document.getElementById('cxp-campo-anticipacion').value, 10) || 3,
+      cuentaAsociada: document.getElementById('cxp-campo-cuenta').value
+    };
+
+    try {
+      let resp;
+      if (cuentaPorPagarEditandoId) {
+        payload.id = cuentaPorPagarEditandoId;
+        resp = await llamarAPI('updateCuentaPorPagar', payload);
+      } else {
+        resp = await llamarAPI('addCuentaPorPagar', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(cuentaPorPagarEditandoId ? 'Actualizada' : 'Agregada', 'ok');
+        cancelarEdicionCuentaPorPagar();
+        document.getElementById('cxp-form-contenedor').style.display = 'none';
+        await cargarCuentasPorPagar();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
+  }
+
+  // Registra el pago: pregunta el monto (sugiere el estimado) y, si no tiene
+  // cuenta asociada, pregunta desde cual cuenta se paga — igual que Prestamos.
+  async function prepararPagoCuentaPorPagar(id) {
+    const c = cuentasPorPagarCache.find(x => String(x['ID']) === String(id));
+    if (!c) return;
+
+    const montoTexto = prompt('Monto pagado por "' + c['Nombre'] + '" (RD$):', c['Monto estimado'] || 0);
+    if (montoTexto === null) return;
+    const monto = parseFloat(montoTexto);
+    if (isNaN(monto) || monto <= 0) {
+      mostrarMensaje('El monto no es válido', 'error');
+      return;
+    }
+
+    const payload = { id: id, monto: monto };
+
+    if (!c['Cuenta asociada']) {
+      const nombresCuentas = cuentasCache.filter(esCuentaActiva).map(cc => cc['Nombre']);
+      if (nombresCuentas.length === 0) {
+        mostrarMensaje('No tienes cuentas creadas. Crea una cuenta primero.', 'error');
+        return;
+      }
+      const cuentaElegida = prompt('¿Desde qué cuenta pagaste?\nOpciones: ' + nombresCuentas.join(', '), nombresCuentas[0]);
+      if (cuentaElegida === null) return;
+      if (!nombresCuentas.includes(cuentaElegida)) {
+        mostrarMensaje('Esa cuenta no existe. Escribe el nombre exacto.', 'error');
+        return;
+      }
+      payload.cuentaPago = cuentaElegida;
+    }
+
+    try {
+      const resp = await llamarAPI('registrarPagoCuentaPorPagar', payload);
+      if (resp.ok) {
+        mostrarMensaje('Pago registrado. Próxima fecha actualizada.', 'ok');
+        await cargarCuentasPorPagar();
+        await cargarTransacciones();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al registrar el pago: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo registrar el pago: ' + err.message, 'error');
+    }
   }
 
   function cerrarSesion() {
