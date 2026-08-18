@@ -693,6 +693,11 @@
     </div>
   </header>
 
+  <div id="banner-error-sync" style="display:none; background:var(--coral-fondo); color:var(--coral); border-radius:8px; padding:0.7rem 0.9rem; margin-bottom:1rem; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+    <span>No se pudo actualizar la información. Revisa tu conexión a internet.</span>
+    <button type="button" class="secundario" onclick="sincronizarDatos()" style="flex-shrink:0;">Reintentar</button>
+  </div>
+
   <!-- Menu lateral -->
   <div id="menu-overlay" onclick="cerrarMenu()"></div>
   <nav id="menu-lateral">
@@ -1448,7 +1453,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "14.0";
+  const VERSION_APP = "14.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1515,7 +1520,11 @@
       // visible — asi cuando el usuario ve la app, ya esta todo poblado,
       // en vez de ver los paneles vacios con "Cargando..." por un momento.
       document.getElementById('texto-loading').textContent = 'Cargando tus datos...';
-      await sincronizarDatos();
+      const cargaExitosa = await sincronizarDatos();
+      if (!cargaExitosa) {
+        mostrarErrorLogin('No se pudo cargar tu información. Verifica tu conexión a internet e intenta de nuevo.');
+        return;
+      }
 
       document.getElementById('loading-screen').style.display = 'none';
       document.getElementById('app-screen').style.display = 'block';
@@ -1559,22 +1568,33 @@
       elementoActivo.closest('#form-cuentapagar')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
-    if (escribiendoEnFormulario) return;
+    if (escribiendoEnFormulario) return true;
 
-    await cargarCuentas();
-    await cargarCategorias();
-    await cargarTransacciones();
-    await cargarTransferencias();
-    await cargarPrestamos();
-    await cargarHistorialPagos();
-    await cargarPresupuestos();
-    await cargarListaCompras();
-    await cargarUsuarios();
-    await cargarNotificaciones();
-    await cargarMetas();
-    await cargarInventario();
-    await cargarCuentasPorPagar();
-    actualizarUltimaSincronizacion();
+    // Todo va dentro de un try/catch: si algo falla (sin internet, Apps Script
+    // caido, etc.) el usuario ve un aviso claro con boton de reintentar, en
+    // vez de quedarse con datos desactualizados sin saber por que.
+    try {
+      await cargarCuentas();
+      await cargarCategorias();
+      await cargarTransacciones();
+      await cargarTransferencias();
+      await cargarPrestamos();
+      await cargarHistorialPagos();
+      await cargarPresupuestos();
+      await cargarListaCompras();
+      await cargarUsuarios();
+      await cargarNotificaciones();
+      await cargarMetas();
+      await cargarInventario();
+      await cargarCuentasPorPagar();
+      actualizarUltimaSincronizacion();
+      document.getElementById('banner-error-sync').style.display = 'none';
+      return true;
+    } catch (err) {
+      console.error('Error al sincronizar datos:', err);
+      document.getElementById('banner-error-sync').style.display = 'flex';
+      return false;
+    }
   }
 
   async function llamarAPI(accion, payload) {
@@ -1986,7 +2006,7 @@
       ? `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', false)">Cerrar cuenta</button>`
       : `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', true)">Reabrir cuenta</button>`;
 
-    const historialAbierto = cuentasHistorialAbierto.has(cuenta['ID']);
+    const historialAbierto = cuentasHistorialAbierto.has(String(cuenta['ID']));
 
     const li = document.createElement('li');
     li.style.display = 'block';
@@ -2025,6 +2045,7 @@
   const HISTORIAL_CUENTA_POR_PAGINA = 10;
 
   function toggleHistorialCuenta(id) {
+    id = String(id);
     if (cuentasHistorialAbierto.has(id)) {
       cuentasHistorialAbierto.delete(id);
     } else {
@@ -2035,6 +2056,7 @@
   }
 
   function verMasHistorialCuenta(id) {
+    id = String(id);
     cuentasHistorialCantidad[id] = (cuentasHistorialCantidad[id] || HISTORIAL_CUENTA_POR_PAGINA) + HISTORIAL_CUENTA_POR_PAGINA;
     renderizarCuentas();
   }
