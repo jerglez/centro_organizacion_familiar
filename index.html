@@ -573,6 +573,20 @@
   .barra-patrimonio .pista { flex: 1; background: var(--fondo); border-radius: 6px; height: 12px; overflow: hidden; }
   .barra-patrimonio .relleno { height: 100%; border-radius: 6px; background: var(--teal); }
   .barra-patrimonio .valor { width: 100px; text-align: right; font-size: 0.78rem; font-weight: 600; flex-shrink: 0; }
+
+  .tarjeta-carrete-cxp {
+    min-width: 150px;
+    flex-shrink: 0;
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-left: 4px solid var(--borde);
+    border-radius: 10px;
+    padding: 0.7rem 0.8rem;
+    cursor: pointer;
+  }
+  .tarjeta-carrete-cxp .nombre { font-weight: 600; font-size: 0.85rem; color: var(--texto); }
+  .tarjeta-carrete-cxp .monto { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 0.9rem; color: var(--texto); margin: 4px 0 2px; }
+  .tarjeta-carrete-cxp .detalle-carrete { font-size: 0.7rem; color: var(--texto-secundario); }
   .badge-alerta {
     font-size: 0.66rem;
     font-weight: 700;
@@ -649,7 +663,7 @@
 
 <div id="loading-screen">
   <div class="spinner"></div>
-  <p>Verificando acceso...</p>
+  <p id="texto-loading">Verificando acceso...</p>
 </div>
 
 <div id="app-screen">
@@ -752,6 +766,11 @@
       <span class="valor" id="valor-gastos">RD$0</span>
     </div>
   </div>
+
+  <section class="bloque" id="seccion-carrete-cxp" style="display:none;">
+    <h3 style="font-size:0.9rem; letter-spacing:0.02em; margin-bottom:0.6rem;">Próximas a vencer</h3>
+    <div id="carrete-cuentaspagar" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:6px;"></div>
+  </section>
 
   <section class="bloque">
     <h3>Gastos por categoría · este mes</h3>
@@ -1429,7 +1448,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "13.0";
+  const VERSION_APP = "14.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1478,10 +1497,6 @@
         mostrarErrorLogin(datosUsuario.error || 'No tienes acceso autorizado. Intenta con otra cuenta.');
         return;
       }
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('app-screen').style.display = 'block';
-      document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
-      document.getElementById('rol').textContent = datosUsuario.datos.rol;
       miEmail = datosUsuario.datos.email;
       miRol = datosUsuario.datos.rol;
 
@@ -1496,7 +1511,17 @@
         Notification.requestPermission();
       }
 
+      // Se cargan TODOS los datos primero, con la pantalla de carga todavia
+      // visible — asi cuando el usuario ve la app, ya esta todo poblado,
+      // en vez de ver los paneles vacios con "Cargando..." por un momento.
+      document.getElementById('texto-loading').textContent = 'Cargando tus datos...';
       await sincronizarDatos();
+
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('app-screen').style.display = 'block';
+      document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
+      document.getElementById('rol').textContent = datosUsuario.datos.rol;
+
       if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
       intervaloSincronizacion = setInterval(sincronizarDatos, 10000); // cada 10 segundos
     } catch (err) {
@@ -1961,6 +1986,8 @@
       ? `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', false)">Cerrar cuenta</button>`
       : `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', true)">Reabrir cuenta</button>`;
 
+    const historialAbierto = cuentasHistorialAbierto.has(cuenta['ID']);
+
     const li = document.createElement('li');
     li.style.display = 'block';
     li.innerHTML = `
@@ -1972,35 +1999,49 @@
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
           <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
           <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
-          <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">Ver historial</button>
+          <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
           <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
           ${botonCerrarReabrir}
           <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
         </div>
       </div>
-      <div id="historial-cuenta-${cuenta['ID']}" style="display:none; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
+      <div id="historial-cuenta-${cuenta['ID']}" style="display:${historialAbierto ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
     `;
+
+    if (historialAbierto) {
+      const contHistorial = li.querySelector('#historial-cuenta-' + cuenta['ID']);
+      renderizarHistorialCuenta(contHistorial, cuenta['Nombre'], cuenta['ID']);
+    }
+
     return li;
   }
 
+  // Cuentas cuyo historial esta expandido, y cuantos movimientos mostrar de
+  // cada una — se guarda aqui (no en el DOM) para que sobreviva a los
+  // refrescos automaticos cada 10 segundos, y solo se cierre cuando el
+  // usuario le d cclic de nuevo.
+  let cuentasHistorialAbierto = new Set();
+  let cuentasHistorialCantidad = {};
+  const HISTORIAL_CUENTA_POR_PAGINA = 10;
+
   function toggleHistorialCuenta(id) {
-    const cont = document.getElementById('historial-cuenta-' + id);
-    if (!cont) return;
-    const abrir = cont.style.display !== 'block';
-    if (abrir) {
-      const cuenta = cuentasCache.find(c => String(c['ID']) === String(id));
-      if (cuenta) renderizarHistorialCuenta(cont, cuenta['Nombre']);
-      cont.style.display = 'block';
+    if (cuentasHistorialAbierto.has(id)) {
+      cuentasHistorialAbierto.delete(id);
     } else {
-      cont.style.display = 'none';
+      cuentasHistorialAbierto.add(id);
+      if (!cuentasHistorialCantidad[id]) cuentasHistorialCantidad[id] = HISTORIAL_CUENTA_POR_PAGINA;
     }
+    renderizarCuentas();
+  }
+
+  function verMasHistorialCuenta(id) {
+    cuentasHistorialCantidad[id] = (cuentasHistorialCantidad[id] || HISTORIAL_CUENTA_POR_PAGINA) + HISTORIAL_CUENTA_POR_PAGINA;
+    renderizarCuentas();
   }
 
   // Junta transacciones y transferencias de una cuenta especifica, ordenadas
-  // por fecha, mas recientes primero. Se limita a las ultimas 15 para no
-  // sobrecargar la vista (para un historial mas completo, usa el filtro de
-  // Cuenta en Finanzas, que tiene paginacion "Ver mas").
-  function renderizarHistorialCuenta(cont, nombreCuenta) {
+  // por fecha, mas recientes primero.
+  function renderizarHistorialCuenta(cont, nombreCuenta, id) {
     const movimientos = [];
 
     transaccionesCache.forEach(t => {
@@ -2023,14 +2064,16 @@
     });
 
     movimientos.sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
-    const visibles = movimientos.slice(0, 15);
 
-    if (visibles.length === 0) {
+    if (movimientos.length === 0) {
       cont.innerHTML = '<p class="vacio">Sin movimientos todavía</p>';
       return;
     }
 
-    cont.innerHTML = visibles.map(m => {
+    const cantidad = cuentasHistorialCantidad[id] || HISTORIAL_CUENTA_POR_PAGINA;
+    const visibles = movimientos.slice(0, cantidad);
+
+    let html = visibles.map(m => {
       const fechaTexto = m.fecha ? m.fecha.toLocaleDateString('es-DO') : '';
       const color = m.tipo === 'ingreso' ? 'var(--verde)' : 'var(--coral)';
       const signo = m.tipo === 'ingreso' ? '+' : '-';
@@ -2039,6 +2082,14 @@
         <span class="cifra" style="color:${color};">${signo}RD$${m.monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
       </div>`;
     }).join('');
+
+    if (movimientos.length > cantidad) {
+      html += `<div style="text-align:center; margin-top:8px;">
+        <button type="button" class="secundario" onclick="verMasHistorialCuenta('${id}')">Ver ${HISTORIAL_CUENTA_POR_PAGINA} siguientes</button>
+      </div>`;
+    }
+
+    cont.innerHTML = html;
   }
 
   // Saldo de una cuenta = saldo inicial + ingresos - gastos (de esa cuenta) + transferencias entrantes - salientes
@@ -3035,6 +3086,54 @@
     if (resp.ok) {
       presupuestosCache = resp.datos;
       renderizarPresupuestosDashboard();
+    }
+  }
+
+  // Detecta si un Presupuesto o una Cuenta por pagar entro en Pre-alerta/Alerta/
+  // Vencido/Limite superado, y lo registra para que aparezca en la campana de
+  // TODOS los familiares (el backend evita duplicar la misma alerta en 24h).
+  // Ademas se guarda un registro por sesion (alertasYaEnviadasSesion) para no
+  // repetir la misma llamada a la API en cada sincronizacion de 10 segundos.
+  let alertasYaEnviadasSesion = new Set();
+
+  async function verificarAlertasAutomaticas() {
+    const ahora = new Date();
+    const mesActual = ahora.getMonth() + 1;
+    const anioActual = ahora.getFullYear();
+    const gastos = calcularGastosPorCategoria();
+
+    presupuestosCache
+      .filter(p => parseInt(p['Mes']) === mesActual && parseInt(p['Anio']) === anioActual)
+      .forEach(p => {
+        const limite = parseFloat(p['Monto limite']) || 0;
+        const gastado = gastos[p['Categoria']] || 0;
+        const pctReal = limite > 0 ? (gastado / limite * 100) : 0;
+        let estado = null;
+        if (pctReal >= 100) estado = 'Límite superado';
+        else if (pctReal >= 90) estado = 'Alerta';
+        else if (pctReal >= 70) estado = 'Pre-alerta';
+        if (estado) {
+          enviarAlertaSiEsNueva('Presupuesto de ' + p['Categoria'], estado, 'Presupuestos');
+        }
+      });
+
+    cuentasPorPagarCache.filter(esCuentaPorPagarActiva).forEach(c => {
+      const estado = calcularEstadoCuentaPorPagar(c);
+      if (estado) {
+        enviarAlertaSiEsNueva(c['Nombre'], estado.texto, 'Cuentas por pagar');
+      }
+    });
+  }
+
+  async function enviarAlertaSiEsNueva(nombre, estado, modulo) {
+    const clave = modulo + ':' + nombre + ':' + estado;
+    if (alertasYaEnviadasSesion.has(clave)) return;
+    alertasYaEnviadasSesion.add(clave);
+    try {
+      await llamarAPI('registrarAlertaAutomatica', { nombre: nombre, estado: estado, modulo: modulo });
+    } catch (err) {
+      // No es critico si falla; se reintentara en la proxima sincronizacion
+      alertasYaEnviadasSesion.delete(clave);
     }
   }
 
@@ -4459,12 +4558,76 @@
   }
 
   // ---------- Cuentas por pagar ----------
+  // Calcula si una cuenta por pagar esta en Pre-alerta/Alerta/Vencido,
+  // segun cuantos dias faltan para su proxima fecha de vencimiento.
+  // Se usa tanto en la lista del modulo, como en el carrete del Dashboard,
+  // como en la verificacion de alertas automaticas para la campana.
+  function calcularEstadoCuentaPorPagar(c) {
+    const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
+    if (!proxima) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const diasRestantes = Math.ceil((proxima - hoy) / 86400000);
+
+    if (diasRestantes <= 2) {
+      return { nivel: diasRestantes < 0 ? 'vencido' : 'alerta', texto: diasRestantes < 0 ? 'Vencido' : 'Alerta' };
+    }
+    if (diasRestantes <= (parseInt(c['Dias de anticipacion'], 10) || 3)) {
+      return { nivel: 'pre', texto: 'Pre-alerta' };
+    }
+    return null;
+  }
+
+  function renderizarCarreteCuentasPorPagar() {
+    const seccion = document.getElementById('seccion-carrete-cxp');
+    const cont = document.getElementById('carrete-cuentaspagar');
+    const activas = cuentasPorPagarCache.filter(esCuentaPorPagarActiva);
+
+    if (activas.length === 0) {
+      seccion.style.display = 'none';
+      return;
+    }
+    seccion.style.display = 'block';
+
+    const ordenadas = activas.slice().sort((a, b) => {
+      const fa = a['Proxima fecha vencimiento'] ? new Date(a['Proxima fecha vencimiento']) : new Date(8640000000000000);
+      const fb = b['Proxima fecha vencimiento'] ? new Date(b['Proxima fecha vencimiento']) : new Date(8640000000000000);
+      return fa - fb;
+    });
+
+    cont.innerHTML = ordenadas.map(c => {
+      const monto = parseFloat(c['Monto estimado']) || 0;
+      const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
+      const estado = calcularEstadoCuentaPorPagar(c);
+      const colorBorde = estado ? (estado.nivel === 'pre' ? 'var(--mango)' : 'var(--coral)') : 'var(--borde)';
+      const badge = estado
+        ? `<span class="badge-alerta ${estado.nivel === 'pre' ? 'prealerta' : 'exceso'}" style="font-size:0.62rem;">${estado.texto}</span>`
+        : '';
+      const hoy = new Date(); hoy.setHours(0,0,0,0);
+      const diasRestantes = proxima ? Math.ceil((proxima - hoy) / 86400000) : null;
+      const textoFecha = proxima
+        ? (diasRestantes < 0 ? 'Venció hace ' + Math.abs(diasRestantes) + ' día(s)' : 'Vence en ' + diasRestantes + ' día(s)') + ' · ' + proxima.toLocaleDateString('es-DO')
+        : 'Sin fecha definida';
+
+      return `
+        <div class="tarjeta-carrete-cxp" style="border-left-color:${colorBorde};" onclick="mostrarSeccion('cuentaspagar')">
+          <div class="nombre">${c['Nombre']}</div>
+          ${badge ? '<div style="margin:4px 0;">' + badge + '</div>' : '<div style="height:4px;"></div>'}
+          <div class="monto">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+          <div class="detalle-carrete">${textoFecha}</div>
+        </div>
+      `;
+    }).join('');
+  }
+
   async function cargarCuentasPorPagar() {
     const resp = await llamarAPI('getCuentasPorPagar');
     if (resp.ok) {
       cuentasPorPagarCache = resp.datos || [];
       poblarSelectCuentaCxp();
       renderizarCuentasPorPagar();
+      renderizarCarreteCuentasPorPagar();
+      verificarAlertasAutomaticas();
     }
   }
 
@@ -4524,17 +4687,11 @@
       const monto = parseFloat(c['Monto estimado']) || 0;
       const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
       const activa = esCuentaPorPagarActiva(c);
+      const estado = calcularEstadoCuentaPorPagar(c);
       let etiqueta = '';
-
-      if (activa && proxima) {
-        const hoy = new Date();
-        hoy.setHours(0, 0, 0, 0);
-        const diasRestantes = Math.ceil((proxima - hoy) / 86400000);
-        if (diasRestantes <= 2) {
-          etiqueta = ' <span class="badge-alerta exceso">' + (diasRestantes < 0 ? 'Vencido' : 'Alerta') + '</span>';
-        } else if (diasRestantes <= (parseInt(c['Dias de anticipacion'], 10) || 3)) {
-          etiqueta = ' <span class="badge-alerta prealerta">Pre-alerta</span>';
-        }
+      if (activa && estado) {
+        const clase = estado.nivel === 'pre' ? 'prealerta' : 'exceso';
+        etiqueta = ` <span class="badge-alerta ${clase}">${estado.texto}</span>`;
       }
       if (!activa) etiqueta = ' <span class="badge-alerta prealerta">Inactiva</span>';
 

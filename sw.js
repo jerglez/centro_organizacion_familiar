@@ -3,7 +3,7 @@
 // solo cacheamos el "cascaron" de la app (el HTML, el manifest y los iconos)
 // para que abra rapido y sea instalable. Los datos siempre vienen en vivo.
 
-const NOMBRE_CACHE = "centro-familiar-v8";
+const NOMBRE_CACHE = "centro-familiar-v9";
 const ARCHIVOS_CASCARON = [
   "./index.html",
   "./manifest.json",
