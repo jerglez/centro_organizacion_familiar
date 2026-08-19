@@ -694,7 +694,7 @@
   </header>
 
   <div id="banner-error-sync" style="display:none; background:var(--coral-fondo); color:var(--coral); border-radius:8px; padding:0.7rem 0.9rem; margin-bottom:1rem; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-    <span>No se pudo actualizar la información. Revisa tu conexión a internet.</span>
+    <span>No se pudo actualizar la información. <span id="banner-error-detalle" style="opacity:0.85;"></span></span>
     <button type="button" class="secundario" onclick="sincronizarDatos()" style="flex-shrink:0;">Reintentar</button>
   </div>
 
@@ -1453,7 +1453,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "15.3";
+  const VERSION_APP = "15.4";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1605,7 +1605,7 @@
         await new Promise(resolve => setTimeout(resolve, 2000));
         await cargarDatosSecundariosConReintento(intento + 1);
       } else {
-        document.getElementById('banner-error-sync').style.display = 'flex';
+        mostrarBannerErrorSync(err);
       }
     }
   }
@@ -1639,9 +1639,14 @@
       return true;
     } catch (err) {
       console.error('Error al sincronizar datos:', err);
-      document.getElementById('banner-error-sync').style.display = 'flex';
+      mostrarBannerErrorSync(err);
       return false;
     }
+  }
+
+  function mostrarBannerErrorSync(err) {
+    document.getElementById('banner-error-detalle').textContent = '(' + (err && err.message ? err.message : 'error desconocido') + ')';
+    document.getElementById('banner-error-sync').style.display = 'flex';
   }
 
   async function llamarAPI(accion, payload) {
