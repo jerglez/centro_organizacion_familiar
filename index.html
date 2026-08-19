@@ -1453,7 +1453,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "15.1";
+  const VERSION_APP = "15.2";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1539,10 +1539,10 @@
 
       // El resto de los modulos (Prestamos, Lista de compras, Usuarios, etc.)
       // se cargan despues, sin bloquear — el usuario ya puede usar el Dashboard.
-      cargarDatosSecundarios().catch(err => {
-        console.error('Error al cargar datos secundarios:', err);
-        document.getElementById('banner-error-sync').style.display = 'flex';
-      });
+      // Justo despues de la carga esencial, Apps Script a veces tiene un
+      // pequeno tropiezo con tantas peticiones seguidas (cold start) — por
+      // eso aqui se reintenta en silencio antes de mostrar cualquier aviso.
+      cargarDatosSecundariosConReintento();
 
       if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
       intervaloSincronizacion = setInterval(sincronizarDatos, 10000); // cada 10 segundos
@@ -1584,6 +1584,24 @@
     await cargarNotificaciones();
     await cargarMetas();
     await cargarInventario();
+  }
+
+  // Solo se usa para la carga inicial (justo despues de mostrar el Dashboard):
+  // si falla, espera un momento y reintenta un par de veces en silencio antes
+  // de molestar al usuario con el banner de error — un tropiezo pasajero de
+  // Apps Script justo al arrancar no deberia alarmar a nadie.
+  async function cargarDatosSecundariosConReintento(intento = 1) {
+    try {
+      await cargarDatosSecundarios();
+      document.getElementById('banner-error-sync').style.display = 'none';
+    } catch (err) {
+      console.error('Error al cargar datos secundarios (intento ' + intento + '):', err);
+      if (intento < 3) {
+        setTimeout(() => cargarDatosSecundariosConReintento(intento + 1), 2000);
+      } else {
+        document.getElementById('banner-error-sync').style.display = 'flex';
+      }
+    }
   }
 
   async function sincronizarDatos() {
