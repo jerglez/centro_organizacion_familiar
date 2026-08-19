@@ -1453,7 +1453,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "15.0";
+  const VERSION_APP = "15.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2017,7 +2017,15 @@
     const activa = esCuentaActiva(cuenta);
 
     let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
-    if (!activa) detalleExtra = '<span class="badge-alerta prealerta">Cerrada</span> ' + detalleExtra;
+    if (!activa) {
+      detalleExtra = '<span class="badge-alerta prealerta">Cerrada</span> ' + detalleExtra;
+    } else if (esPasivo) {
+      const estadoTarjeta = calcularEstadoTarjeta(cuenta);
+      if (estadoTarjeta) {
+        const clase = estadoTarjeta.nivel === 'pre' ? 'prealerta' : 'exceso';
+        detalleExtra = `<span class="badge-alerta ${clase}">${estadoTarjeta.texto}</span> ` + detalleExtra;
+      }
+    }
     if (cuenta['Tipo'] === 'Inversion') {
       const aportado = calcularAportadoInversion(cuenta['Nombre']);
       const ganancia = calcularGananciaInversion(cuenta['Nombre']);
@@ -2572,9 +2580,16 @@
       const botonPago = pagado
         ? ''
         : `<button type="button" class="secundario" onclick="prepararPagoPrestamo('${p['ID']}')">Registrar pago</button>`;
-      const etiquetaPagado = pagado
+      let etiquetaPagado = pagado
         ? ' <span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Pagado ✓</span>'
         : '';
+      if (!pagado) {
+        const estadoPrestamo = calcularEstadoPrestamo(p);
+        if (estadoPrestamo) {
+          const clase = estadoPrestamo.nivel === 'pre' ? 'prealerta' : 'exceso';
+          etiquetaPagado += ` <span class="badge-alerta ${clase}">${estadoPrestamo.texto}</span>`;
+        }
+      }
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div class="item-info" style="cursor:pointer;" onclick="${pagado ? `toggleHistorialPrestamo('${p['ID']}')` : `prepararPagoPrestamo('${p['ID']}')`}" title="${pagado ? 'Clic para ver el historial' : 'Clic para registrar un pago'}">
