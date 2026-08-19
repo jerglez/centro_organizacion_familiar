@@ -1453,7 +1453,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "15.2";
+  const VERSION_APP = "15.3";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1538,11 +1538,13 @@
       document.getElementById('rol').textContent = datosUsuario.datos.rol;
 
       // El resto de los modulos (Prestamos, Lista de compras, Usuarios, etc.)
-      // se cargan despues, sin bloquear — el usuario ya puede usar el Dashboard.
-      // Justo despues de la carga esencial, Apps Script a veces tiene un
-      // pequeno tropiezo con tantas peticiones seguidas (cold start) — por
-      // eso aqui se reintenta en silencio antes de mostrar cualquier aviso.
-      cargarDatosSecundariosConReintento();
+      // se cargan despues — el Dashboard ya esta visible, asi que esto no le
+      // hace esperar nada extra al usuario. Se espera (sin bloquear la vista)
+      // a que termine del todo ANTES de programar la sincronizacion automatica:
+      // si no, las dos cargas podrian pisarse y pedirle lo mismo a Apps Script
+      // al mismo tiempo, causando fallos que antes se veian como el banner
+      // de error apareciendo justo al iniciar sesion.
+      await cargarDatosSecundariosConReintento();
 
       if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
       intervaloSincronizacion = setInterval(sincronizarDatos, 10000); // cada 10 segundos
@@ -1597,7 +1599,11 @@
     } catch (err) {
       console.error('Error al cargar datos secundarios (intento ' + intento + '):', err);
       if (intento < 3) {
-        setTimeout(() => cargarDatosSecundariosConReintento(intento + 1), 2000);
+        // Se espera de verdad (con una Promise) antes de reintentar — asi,
+        // quien llame con "await" a esta funcion espera correctamente a que
+        // TODOS los reintentos terminen, no solo el primero.
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await cargarDatosSecundariosConReintento(intento + 1);
       } else {
         document.getElementById('banner-error-sync').style.display = 'flex';
       }
