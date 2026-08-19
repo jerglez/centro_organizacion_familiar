@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#0E5C56">
 <link rel="icon" type="image/png" href="icon-192.png">
 <!-- Etiquetas especificas que iPhone necesita (Android usa el manifest.json de arriba) -->
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Centro Familiar">
@@ -1453,7 +1454,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "15.4";
+  const VERSION_APP = "15.5";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {

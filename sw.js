@@ -3,7 +3,7 @@
 // solo cacheamos el "cascaron" de la app (el HTML, el manifest y los iconos)
 // para que abra rapido y sea instalable. Los datos siempre vienen en vivo.
 
-const NOMBRE_CACHE = "centro-familiar-v15";
+const NOMBRE_CACHE = "centro-familiar-v16";
 const ARCHIVOS_CASCARON = [
   "./index.html",
   "./manifest.json",
@@ -30,9 +30,16 @@ self.addEventListener("activate", (evento) => {
 });
 
 self.addEventListener("fetch", (evento) => {
-  // Las llamadas a la API de Apps Script (script.google.com) NUNCA se cachean:
-  // siempre deben ir en vivo, o los datos financieros quedarian desactualizados.
-  if (evento.request.url.indexOf("script.google.com") !== -1) {
+  const url = new URL(evento.request.url);
+
+  // Solo se intercepta lo que es de NUESTRO propio origen (index.html,
+  // manifest.json, iconos). Cualquier peticion a otro dominio — Apps Script,
+  // Google Identity Services, fuentes, chequeos internos de Google como
+  // csp.withgoogle.com, etc. — se deja pasar SIN TOCAR. Antes solo excluiamos
+  // "script.google.com", pero eso dejaba el service worker interceptando
+  // peticiones internas de terceros que no le corresponden, causando el error
+  // "Request mode is no-cors but redirect mode is not follow".
+  if (url.origin !== self.location.origin) {
     return;
   }
 
