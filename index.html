@@ -1453,7 +1453,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "14.1";
+  const VERSION_APP = "15.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1520,7 +1520,13 @@
       // visible — asi cuando el usuario ve la app, ya esta todo poblado,
       // en vez de ver los paneles vacios con "Cargando..." por un momento.
       document.getElementById('texto-loading').textContent = 'Cargando tus datos...';
-      const cargaExitosa = await sincronizarDatos();
+
+      let cargaExitosa = true;
+      try {
+        await cargarDatosEsenciales();
+      } catch (err) {
+        cargaExitosa = false;
+      }
       if (!cargaExitosa) {
         mostrarErrorLogin('No se pudo cargar tu información. Verifica tu conexión a internet e intenta de nuevo.');
         return;
@@ -1530,6 +1536,13 @@
       document.getElementById('app-screen').style.display = 'block';
       document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
       document.getElementById('rol').textContent = datosUsuario.datos.rol;
+
+      // El resto de los modulos (Prestamos, Lista de compras, Usuarios, etc.)
+      // se cargan despues, sin bloquear — el usuario ya puede usar el Dashboard.
+      cargarDatosSecundarios().catch(err => {
+        console.error('Error al cargar datos secundarios:', err);
+        document.getElementById('banner-error-sync').style.display = 'flex';
+      });
 
       if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
       intervaloSincronizacion = setInterval(sincronizarDatos, 10000); // cada 10 segundos
@@ -1550,6 +1563,27 @@
   function actualizarUltimaSincronizacion() {
     document.getElementById('ultima-sync').textContent =
       'Última sincronización: ' + horaSantoDomingo(new Date());
+  }
+
+  // Lo minimo que el Dashboard necesita para verse completo. Se carga primero
+  // y bloquea la pantalla de carga inicial — el resto sigue despues, sin bloquear.
+  async function cargarDatosEsenciales() {
+    await cargarCuentas();
+    await cargarCategorias();
+    await cargarTransacciones();
+    await cargarTransferencias();
+    await cargarPresupuestos();
+    await cargarCuentasPorPagar();
+  }
+
+  async function cargarDatosSecundarios() {
+    await cargarPrestamos();
+    await cargarHistorialPagos();
+    await cargarListaCompras();
+    await cargarUsuarios();
+    await cargarNotificaciones();
+    await cargarMetas();
+    await cargarInventario();
   }
 
   async function sincronizarDatos() {
@@ -1574,19 +1608,8 @@
     // caido, etc.) el usuario ve un aviso claro con boton de reintentar, en
     // vez de quedarse con datos desactualizados sin saber por que.
     try {
-      await cargarCuentas();
-      await cargarCategorias();
-      await cargarTransacciones();
-      await cargarTransferencias();
-      await cargarPrestamos();
-      await cargarHistorialPagos();
-      await cargarPresupuestos();
-      await cargarListaCompras();
-      await cargarUsuarios();
-      await cargarNotificaciones();
-      await cargarMetas();
-      await cargarInventario();
-      await cargarCuentasPorPagar();
+      await cargarDatosEsenciales();
+      await cargarDatosSecundarios();
       actualizarUltimaSincronizacion();
       document.getElementById('banner-error-sync').style.display = 'none';
       return true;
@@ -2477,6 +2500,8 @@
       prestamosCache = resp.datos;
       poblarSelectCuentaPrestamo();
       renderizarPrestamos();
+      renderizarCarreteCuentasPorPagar(); // el carrete tambien incluye prestamos, que llegan en la fase secundaria
+      verificarAlertasAutomaticas();
     }
   }
 
@@ -3143,6 +3168,20 @@
       const estado = calcularEstadoCuentaPorPagar(c);
       if (estado) {
         enviarAlertaSiEsNueva(c['Nombre'], estado.texto, 'Cuentas por pagar');
+      }
+    });
+
+    cuentasCache.filter(c => c['Tipo'] === 'Tarjeta de credito' && esCuentaActiva(c)).forEach(c => {
+      const estado = calcularEstadoTarjeta(c);
+      if (estado) {
+        enviarAlertaSiEsNueva('Pago de tarjeta ' + c['Nombre'], estado.texto, 'Cuentas');
+      }
+    });
+
+    prestamosCache.forEach(p => {
+      const estado = calcularEstadoPrestamo(p);
+      if (estado) {
+        enviarAlertaSiEsNueva('Pago de préstamo ' + p['Nombre'], estado.texto, 'Préstamos');
       }
     });
   }
@@ -4584,58 +4623,99 @@
   // segun cuantos dias faltan para su proxima fecha de vencimiento.
   // Se usa tanto en la lista del modulo, como en el carrete del Dashboard,
   // como en la verificacion de alertas automaticas para la campana.
+  // Calculo generico de estado segun una fecha limite y dias de anticipacion.
+  // Se usa para Cuentas por pagar, Tarjetas de credito y Prestamos por igual.
+  function calcularEstadoPorFecha(fecha, diasAnticipacion) {
+    if (!fecha) return null;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const diasRestantes = Math.ceil((fecha - hoy) / 86400000);
+
+    if (diasRestantes <= 2) {
+      return { nivel: diasRestantes < 0 ? 'vencido' : 'alerta', texto: diasRestantes < 0 ? 'Vencido' : 'Alerta', diasRestantes };
+    }
+    if (diasRestantes <= diasAnticipacion) {
+      return { nivel: 'pre', texto: 'Pre-alerta', diasRestantes };
+    }
+    return { nivel: null, texto: null, diasRestantes }; // sin alerta todavia, pero se devuelve para saber cuanto falta
+  }
+
   function calcularEstadoCuentaPorPagar(c) {
     const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
     if (!proxima) return null;
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const diasRestantes = Math.ceil((proxima - hoy) / 86400000);
+    const r = calcularEstadoPorFecha(proxima, parseInt(c['Dias de anticipacion'], 10) || 3);
+    return r && r.nivel ? r : null;
+  }
 
-    if (diasRestantes <= 2) {
-      return { nivel: diasRestantes < 0 ? 'vencido' : 'alerta', texto: diasRestantes < 0 ? 'Vencido' : 'Alerta' };
-    }
-    if (diasRestantes <= (parseInt(c['Dias de anticipacion'], 10) || 3)) {
-      return { nivel: 'pre', texto: 'Pre-alerta' };
-    }
-    return null;
+  // Tarjetas de credito: usa "Fecha limite de pago". 5 dias de anticipacion por defecto.
+  function calcularEstadoTarjeta(cuenta) {
+    if (cuenta['Tipo'] !== 'Tarjeta de credito' || !cuenta['Fecha limite de pago']) return null;
+    const fecha = new Date(cuenta['Fecha limite de pago']);
+    const r = calcularEstadoPorFecha(fecha, 5);
+    return r && r.nivel ? r : null;
+  }
+
+  // Prestamos activos (con balance pendiente): usa "Proxima fecha de pago". 5 dias de anticipacion.
+  function calcularEstadoPrestamo(p) {
+    const balance = parseFloat(p['Balance pendiente']) || 0;
+    if (balance <= 0 || !p['Proxima fecha de pago']) return null;
+    const fecha = new Date(p['Proxima fecha de pago']);
+    const r = calcularEstadoPorFecha(fecha, 5);
+    return r && r.nivel ? r : null;
   }
 
   function renderizarCarreteCuentasPorPagar() {
     const seccion = document.getElementById('seccion-carrete-cxp');
     const cont = document.getElementById('carrete-cuentaspagar');
-    const activas = cuentasPorPagarCache.filter(esCuentaPorPagarActiva);
 
-    if (activas.length === 0) {
+    // Junta las 3 fuentes en un solo formato comun: {nombre, monto, fecha, modulo, estado, diasRestantes}
+    const items = [];
+
+    cuentasPorPagarCache.filter(esCuentaPorPagarActiva).forEach(c => {
+      const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
+      if (!proxima) return;
+      const r = calcularEstadoPorFecha(proxima, parseInt(c['Dias de anticipacion'], 10) || 3);
+      items.push({ nombre: c['Nombre'], monto: parseFloat(c['Monto estimado']) || 0, fecha: proxima, modulo: 'cuentaspagar', estado: r, ventana: (parseInt(c['Dias de anticipacion'], 10) || 3) + 5 });
+    });
+
+    cuentasCache.filter(c => c['Tipo'] === 'Tarjeta de credito' && esCuentaActiva(c) && c['Fecha limite de pago']).forEach(c => {
+      const fecha = new Date(c['Fecha limite de pago']);
+      const r = calcularEstadoPorFecha(fecha, 5);
+      items.push({ nombre: c['Nombre'] + ' (tarjeta)', monto: calcularSaldoCuenta(c['Nombre']), fecha: fecha, modulo: 'cuentas', estado: r, ventana: 10 });
+    });
+
+    prestamosCache.filter(p => (parseFloat(p['Balance pendiente']) || 0) > 0 && p['Proxima fecha de pago']).forEach(p => {
+      const fecha = new Date(p['Proxima fecha de pago']);
+      const r = calcularEstadoPorFecha(fecha, 5);
+      items.push({ nombre: p['Nombre'] + ' (préstamo)', monto: parseFloat(p['Cuota mensual']) || 0, fecha: fecha, modulo: 'prestamos', estado: r, ventana: 10 });
+    });
+
+    // Solo se muestran las que ya estan dentro de su "ventana" de aparicion
+    // (5 dias antes de que lleguen a Pre-alerta), no todo lo que existe.
+    const visibles = items.filter(it => it.estado.diasRestantes <= it.ventana);
+
+    if (visibles.length === 0) {
       seccion.style.display = 'none';
       return;
     }
     seccion.style.display = 'block';
 
-    const ordenadas = activas.slice().sort((a, b) => {
-      const fa = a['Proxima fecha vencimiento'] ? new Date(a['Proxima fecha vencimiento']) : new Date(8640000000000000);
-      const fb = b['Proxima fecha vencimiento'] ? new Date(b['Proxima fecha vencimiento']) : new Date(8640000000000000);
-      return fa - fb;
-    });
+    visibles.sort((a, b) => a.fecha - b.fecha);
 
-    cont.innerHTML = ordenadas.map(c => {
-      const monto = parseFloat(c['Monto estimado']) || 0;
-      const proxima = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
-      const estado = calcularEstadoCuentaPorPagar(c);
-      const colorBorde = estado ? (estado.nivel === 'pre' ? 'var(--mango)' : 'var(--coral)') : 'var(--borde)';
-      const badge = estado
+    cont.innerHTML = visibles.map(it => {
+      const estado = it.estado;
+      const colorBorde = estado.nivel ? (estado.nivel === 'pre' ? 'var(--mango)' : 'var(--coral)') : 'var(--borde)';
+      const badge = estado.nivel
         ? `<span class="badge-alerta ${estado.nivel === 'pre' ? 'prealerta' : 'exceso'}" style="font-size:0.62rem;">${estado.texto}</span>`
         : '';
-      const hoy = new Date(); hoy.setHours(0,0,0,0);
-      const diasRestantes = proxima ? Math.ceil((proxima - hoy) / 86400000) : null;
-      const textoFecha = proxima
-        ? (diasRestantes < 0 ? 'Venció hace ' + Math.abs(diasRestantes) + ' día(s)' : 'Vence en ' + diasRestantes + ' día(s)') + ' · ' + proxima.toLocaleDateString('es-DO')
-        : 'Sin fecha definida';
+      const d = estado.diasRestantes;
+      const textoFecha = (d < 0 ? 'Venció hace ' + Math.abs(d) + ' día(s)' : 'Vence en ' + d + ' día(s)') + ' · ' + it.fecha.toLocaleDateString('es-DO');
 
       return `
-        <div class="tarjeta-carrete-cxp" style="border-left-color:${colorBorde};" onclick="mostrarSeccion('cuentaspagar')">
-          <div class="nombre">${c['Nombre']}</div>
+        <div class="tarjeta-carrete-cxp" style="border-left-color:${colorBorde};" onclick="mostrarSeccion('${it.modulo}')">
+          <div class="nombre">${it.nombre}</div>
           ${badge ? '<div style="margin:4px 0;">' + badge + '</div>' : '<div style="height:4px;"></div>'}
-          <div class="monto">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+          <div class="monto">RD$${it.monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
           <div class="detalle-carrete">${textoFecha}</div>
         </div>
       `;
