@@ -368,7 +368,8 @@
   form#form-usuario,
   form#form-meta,
   form#form-inventario,
-  form#form-cuentapagar { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-cuentapagar,
+  form#form-evento { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
@@ -378,7 +379,8 @@
   form#form-usuario .campo-ancho,
   form#form-meta .campo-ancho,
   form#form-inventario .campo-ancho,
-  form#form-cuentapagar .campo-ancho { grid-column: 1 / -1; }
+  form#form-cuentapagar .campo-ancho,
+  form#form-evento .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
@@ -388,7 +390,8 @@
   form#form-usuario label,
   form#form-meta label,
   form#form-inventario label,
-  form#form-cuentapagar label {
+  form#form-cuentapagar label,
+  form#form-evento label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -413,7 +416,9 @@
   form#form-inventario input,
   form#form-inventario select,
   form#form-cuentapagar input,
-  form#form-cuentapagar select {
+  form#form-cuentapagar select,
+  form#form-evento input,
+  form#form-evento select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -458,7 +463,8 @@
   #lista-prestamos,
   #lista-metas,
   #lista-inventario,
-  #lista-cuentaspagar { list-style: none; margin: 0; padding: 0; }
+  #lista-cuentaspagar,
+  #lista-calendario { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
@@ -638,7 +644,8 @@
     form#form-usuario,
     form#form-meta,
     form#form-inventario,
-    form#form-cuentapagar { grid-template-columns: 1fr; }
+    form#form-cuentapagar,
+    form#form-evento { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -732,8 +739,8 @@
     </div>
 
     <div class="menu-grupo">HOGAR</div>
-    <div class="menu-item proximamente">
-      <span class="punto punto-mango"></span>Calendario <em>(próximamente)</em>
+    <div class="menu-item" data-panel="calendario" onclick="mostrarSeccion('calendario')">
+      <span class="punto punto-mango"></span>Calendario
     </div>
     <div class="menu-item" data-panel="listacompras" onclick="mostrarSeccion('listacompras')">
       <span class="punto punto-mango"></span>Lista de compras
@@ -776,6 +783,11 @@
   <section class="bloque" id="seccion-carrete-cxp" style="display:none;">
     <h3 style="font-size:0.9rem; letter-spacing:0.02em; margin-bottom:0.6rem;">Próximas a vencer</h3>
     <div id="carrete-cuentaspagar" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:6px;"></div>
+  </section>
+
+  <section class="bloque" id="seccion-proximos-eventos" style="display:none;">
+    <h3 style="font-size:0.9rem; letter-spacing:0.02em; margin-bottom:0.6rem;">Próximos eventos</h3>
+    <ul id="lista-proximos-eventos" style="list-style:none; margin:0; padding:0;"></ul>
   </section>
 
   <section class="bloque">
@@ -1244,6 +1256,66 @@
   </section>
   </div>
 
+  <div class="panel" id="panel-calendario">
+  <section class="bloque">
+    <h3>Calendario</h3>
+
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-cal="proximos" onclick="cambiarFiltroCalendario('proximos')">Próximos</button>
+      <button type="button" class="filtro-btn" data-filtro-cal="pasados" onclick="cambiarFiltroCalendario('pasados')">Pasados</button>
+      <button type="button" class="filtro-btn" data-filtro-cal="todos" onclick="cambiarFiltroCalendario('todos')">Todos</button>
+    </div>
+
+    <ul id="lista-calendario" style="margin-bottom:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;"
+      onclick="cancelarEdicionEvento(); document.getElementById('evento-form-contenedor').style.display='block'; document.getElementById('form-evento').scrollIntoView({behavior:'smooth'});">
+      + Nuevo evento
+    </button>
+
+    <div id="evento-form-contenedor" style="display:none;">
+    <form id="form-evento" onsubmit="return guardarEvento(event)">
+      <input type="hidden" id="evento-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="evento-campo-titulo">Título</label>
+        <input type="text" id="evento-campo-titulo" placeholder="Ej. Cumpleaños de mamá" required>
+      </div>
+      <div>
+        <label for="evento-campo-fecha">Fecha</label>
+        <input type="date" id="evento-campo-fecha" required>
+      </div>
+      <div>
+        <label for="evento-campo-tipo">Tipo</label>
+        <select id="evento-campo-tipo">
+          <option value="Cumpleaños">Cumpleaños</option>
+          <option value="Cita">Cita</option>
+          <option value="Pago">Pago</option>
+          <option value="Escuela">Escuela</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+      <div class="campo-ancho">
+        <label for="evento-campo-descripcion">Descripción (opcional)</label>
+        <input type="text" id="evento-campo-descripcion" placeholder="Detalles del evento">
+      </div>
+      <div class="campo-ancho">
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.82rem; color:var(--texto);">
+          <input type="checkbox" id="evento-campo-visible" style="width:auto;" checked>
+          Mostrar en el Dashboard si está próximo
+        </label>
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="evento-btn-guardar" style="flex:1;">Agregar evento</button>
+        <button type="button" class="secundario" id="evento-btn-cancelar"
+          onclick="cancelarEdicionEvento(); document.getElementById('evento-form-contenedor').style.display='none';" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+    </div>
+  </section>
+  </div>
+
   <div class="panel" id="panel-listacompras">
   <section class="bloque">
     <h3>Lista de compras</h3>
@@ -1400,6 +1472,7 @@
       </div>
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="cxp-btn-guardar" style="flex:1;">Agregar cuenta por pagar</button>
+        <button type="button" class="guardar" id="cxp-btn-aplicar-pago" onclick="aplicarPagoCuentaPorPagar()" style="flex:1; display:none; background:var(--verde);">Aplicar pago</button>
         <button type="button" class="secundario" id="cxp-btn-cancelar"
           onclick="cancelarEdicionCuentaPorPagar(); document.getElementById('cxp-form-contenedor').style.display='none';" style="display:none;">Cancelar</button>
       </div>
@@ -1454,7 +1527,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "15.5";
+  const VERSION_APP = "16.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1577,6 +1650,7 @@
     await cargarTransferencias();
     await cargarPresupuestos();
     await cargarCuentasPorPagar();
+    await cargarCalendario();
   }
 
   async function cargarDatosSecundarios() {
@@ -3171,6 +3245,11 @@
   let inventarioEditandoId = null;
   let cuentasPorPagarCache = [];
   let cuentaPorPagarEditandoId = null;
+  let cuentaPorPagarPagandoId = null;
+  let calendarioCache = [];
+  let eventoEditandoId = null;
+  let filtroCalendario = 'proximos';
+  const CAMPOS_BLOQUEABLES_CXP = ['cxp-campo-nombre', 'cxp-campo-tipo', 'cxp-campo-corte', 'cxp-campo-fecha', 'cxp-campo-anticipacion'];
   let filtroCuentasPorPagar = 'activas';
 
   async function cargarPresupuestos() {
@@ -4887,6 +4966,7 @@
   }
 
   function editarCuentaPorPagar(id) {
+    cancelarEdicionCuentaPorPagar(); // limpia cualquier modo anterior (edicion o pago)
     const c = cuentasPorPagarCache.find(x => String(x['ID']) === String(id));
     if (!c) return;
     cuentaPorPagarEditandoId = id;
@@ -4900,6 +4980,7 @@
     document.getElementById('cxp-campo-anticipacion').value = c['Dias de anticipacion'] || 3;
     document.getElementById('cxp-campo-cuenta').value = c['Cuenta asociada'] || '';
     document.getElementById('cxp-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('cxp-btn-guardar').style.display = 'inline-block';
     document.getElementById('cxp-btn-cancelar').style.display = 'inline-block';
     document.getElementById('cxp-form-contenedor').style.display = 'block';
     document.getElementById('form-cuentapagar').scrollIntoView({ behavior: 'smooth' });
@@ -4907,9 +4988,15 @@
 
   function cancelarEdicionCuentaPorPagar() {
     cuentaPorPagarEditandoId = null;
+    cuentaPorPagarPagandoId = null;
     document.getElementById('form-cuentapagar').reset();
     document.getElementById('cxp-campo-id').value = '';
+    CAMPOS_BLOQUEABLES_CXP.forEach(idCampo => {
+      document.getElementById(idCampo).disabled = false;
+    });
     document.getElementById('cxp-btn-guardar').textContent = 'Agregar cuenta por pagar';
+    document.getElementById('cxp-btn-guardar').style.display = 'inline-block';
+    document.getElementById('cxp-btn-aplicar-pago').style.display = 'none';
     document.getElementById('cxp-btn-cancelar').style.display = 'none';
   }
 
@@ -4931,6 +5018,10 @@
 
   async function guardarCuentaPorPagar(evento) {
     evento.preventDefault();
+    if (cuentaPorPagarPagandoId) {
+      aplicarPagoCuentaPorPagar();
+      return false;
+    }
     const boton = document.getElementById('cxp-btn-guardar');
     boton.disabled = true;
 
@@ -4970,41 +5061,61 @@
     return false;
   }
 
-  // Registra el pago: pregunta el monto (sugiere el estimado) y, si no tiene
-  // cuenta asociada, pregunta desde cual cuenta se paga — igual que Prestamos.
-  async function prepararPagoCuentaPorPagar(id) {
+  // Carga la cuenta por pagar en el formulario en "modo pago": bloquea Nombre,
+  // Tipo, Dia de corte, Proxima fecha y Dias de anticipacion (eso no deberia
+  // cambiar al pagar), dejando editables solo el Monto (para ese pago puntual)
+  // y la Cuenta asociada — con el SELECTOR real que ya existe en el formulario,
+  // en vez de tener que escribir el nombre en un prompt de texto.
+  function prepararPagoCuentaPorPagar(id) {
+    cancelarEdicionCuentaPorPagar();
     const c = cuentasPorPagarCache.find(x => String(x['ID']) === String(id));
     if (!c) return;
+    cuentaPorPagarPagandoId = id;
 
-    const montoTexto = prompt('Monto pagado por "' + c['Nombre'] + '" (RD$):', c['Monto estimado'] || 0);
-    if (montoTexto === null) return;
-    const monto = parseFloat(montoTexto);
+    document.getElementById('cxp-campo-id').value = id;
+    document.getElementById('cxp-campo-nombre').value = c['Nombre'];
+    document.getElementById('cxp-campo-tipo').value = c['Tipo'] || 'Servicio';
+    document.getElementById('cxp-campo-monto').value = c['Monto estimado'] || 0;
+    document.getElementById('cxp-campo-corte').value = c['Dia de corte'] || '';
+    const fecha = c['Proxima fecha vencimiento'] ? new Date(c['Proxima fecha vencimiento']) : null;
+    document.getElementById('cxp-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('cxp-campo-anticipacion').value = c['Dias de anticipacion'] || 3;
+    document.getElementById('cxp-campo-cuenta').value = c['Cuenta asociada'] || '';
+
+    CAMPOS_BLOQUEABLES_CXP.forEach(idCampo => {
+      document.getElementById(idCampo).disabled = true;
+    });
+
+    document.getElementById('cxp-btn-guardar').style.display = 'none';
+    document.getElementById('cxp-btn-aplicar-pago').style.display = 'inline-block';
+    document.getElementById('cxp-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('cxp-form-contenedor').style.display = 'block';
+    document.getElementById('form-cuentapagar').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  async function aplicarPagoCuentaPorPagar() {
+    if (!cuentaPorPagarPagandoId) return;
+    const monto = parseFloat(document.getElementById('cxp-campo-monto').value);
     if (isNaN(monto) || monto <= 0) {
-      mostrarMensaje('El monto no es válido', 'error');
+      mostrarMensaje('Ingresa un monto válido', 'error');
+      return;
+    }
+    const cuentaPago = document.getElementById('cxp-campo-cuenta').value;
+    if (!cuentaPago) {
+      mostrarMensaje('Elige desde qué cuenta pagaste', 'error');
       return;
     }
 
-    const payload = { id: id, monto: monto };
-
-    if (!c['Cuenta asociada']) {
-      const nombresCuentas = cuentasCache.filter(esCuentaActiva).map(cc => cc['Nombre']);
-      if (nombresCuentas.length === 0) {
-        mostrarMensaje('No tienes cuentas creadas. Crea una cuenta primero.', 'error');
-        return;
-      }
-      const cuentaElegida = prompt('¿Desde qué cuenta pagaste?\nOpciones: ' + nombresCuentas.join(', '), nombresCuentas[0]);
-      if (cuentaElegida === null) return;
-      if (!nombresCuentas.includes(cuentaElegida)) {
-        mostrarMensaje('Esa cuenta no existe. Escribe el nombre exacto.', 'error');
-        return;
-      }
-      payload.cuentaPago = cuentaElegida;
-    }
+    const boton = document.getElementById('cxp-btn-aplicar-pago');
+    boton.disabled = true;
+    boton.textContent = 'Aplicando...';
 
     try {
-      const resp = await llamarAPI('registrarPagoCuentaPorPagar', payload);
+      const resp = await llamarAPI('registrarPagoCuentaPorPagar', { id: cuentaPorPagarPagandoId, monto: monto, cuentaPago: cuentaPago });
       if (resp.ok) {
         mostrarMensaje('Pago registrado. Próxima fecha actualizada.', 'ok');
+        cancelarEdicionCuentaPorPagar();
+        document.getElementById('cxp-form-contenedor').style.display = 'none';
         await cargarCuentasPorPagar();
         await cargarTransacciones();
         actualizarUltimaSincronizacion();
@@ -5013,7 +5124,190 @@
       }
     } catch (err) {
       mostrarMensaje('No se pudo registrar el pago: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Aplicar pago';
     }
+  }
+
+  // ---------- Calendario ----------
+  async function cargarCalendario() {
+    const resp = await llamarAPI('getCalendario');
+    if (resp.ok) {
+      calendarioCache = resp.datos || [];
+      renderizarCalendario();
+      renderizarProximosEventosDashboard();
+    }
+  }
+
+  function cambiarFiltroCalendario(valor) {
+    filtroCalendario = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-cal]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.filtroCal === valor);
+    });
+    renderizarCalendario();
+  }
+
+  const ETIQUETAS_TIPO_EVENTO = {
+    'Cumpleaños': 'var(--mango)', 'Cita': 'var(--teal)', 'Pago': 'var(--coral)',
+    'Escuela': 'var(--verde)', 'Otro': 'var(--texto-secundario)'
+  };
+
+  function renderizarCalendario() {
+    const lista = document.getElementById('lista-calendario');
+    lista.innerHTML = '';
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+
+    const filtrados = calendarioCache.filter(e => {
+      if (!e['Fecha']) return filtroCalendario === 'todos';
+      const fecha = new Date(e['Fecha']);
+      if (filtroCalendario === 'proximos') return fecha >= hoy;
+      if (filtroCalendario === 'pasados') return fecha < hoy;
+      return true;
+    });
+
+    if (filtrados.length === 0) {
+      lista.innerHTML = '<li class="vacio">No hay eventos en esta vista</li>';
+      return;
+    }
+
+    const ordenados = filtrados.sort((a, b) => new Date(a['Fecha'] || 0) - new Date(b['Fecha'] || 0));
+    if (filtroCalendario === 'pasados') ordenados.reverse(); // los pasados mas recientes primero
+
+    ordenados.forEach(e => {
+      const fecha = e['Fecha'] ? new Date(e['Fecha']) : null;
+      const color = ETIQUETAS_TIPO_EVENTO[e['Tipo']] || 'var(--borde)';
+      const li = document.createElement('li');
+      li.style.display = 'block';
+      li.style.borderLeft = '3px solid ' + color;
+      li.style.paddingLeft = '10px';
+      li.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="item-info" style="cursor:pointer;" onclick="editarEvento('${e['ID']}')" title="Clic para editar">
+            <div class="categoria">${e['Titulo']}</div>
+            <div class="detalle">${e['Tipo'] || 'Otro'} · ${fecha ? fecha.toLocaleDateString('es-DO') : 'Sin fecha'}${e['Descripcion'] ? ' · ' + e['Descripcion'] : ''}</div>
+          </div>
+          <button type="button" class="secundario" onclick="eliminarEvento('${e['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  // Muestra en el Dashboard los eventos marcados "Visible en dashboard" que
+  // esten en los proximos 30 dias.
+  function renderizarProximosEventosDashboard() {
+    const seccion = document.getElementById('seccion-proximos-eventos');
+    const lista = document.getElementById('lista-proximos-eventos');
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const limite = new Date(hoy); limite.setDate(limite.getDate() + 30);
+
+    const proximos = calendarioCache.filter(e => {
+      if (e['Visible en dashboard'] !== 'Si' && e['Visible en dashboard'] !== true) return false;
+      if (!e['Fecha']) return false;
+      const fecha = new Date(e['Fecha']);
+      return fecha >= hoy && fecha <= limite;
+    }).sort((a, b) => new Date(a['Fecha']) - new Date(b['Fecha']));
+
+    if (proximos.length === 0) {
+      seccion.style.display = 'none';
+      return;
+    }
+    seccion.style.display = 'block';
+
+    lista.innerHTML = proximos.map(e => {
+      const fecha = new Date(e['Fecha']);
+      const dias = Math.ceil((fecha - hoy) / 86400000);
+      const color = ETIQUETAS_TIPO_EVENTO[e['Tipo']] || 'var(--borde)';
+      return `<li style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid var(--borde); border-left:3px solid ${color}; padding-left:10px;">
+        <div>
+          <div class="categoria" style="font-size:0.85rem;">${e['Titulo']}</div>
+          <div class="detalle">${e['Tipo'] || 'Otro'} · ${fecha.toLocaleDateString('es-DO')}</div>
+        </div>
+        <span class="cifra" style="font-size:0.78rem; color:var(--texto-secundario);">${dias === 0 ? 'Hoy' : 'En ' + dias + ' día(s)'}</span>
+      </li>`;
+    }).join('');
+  }
+
+  function editarEvento(id) {
+    const e = calendarioCache.find(x => String(x['ID']) === String(id));
+    if (!e) return;
+    eventoEditandoId = id;
+    document.getElementById('evento-campo-id').value = id;
+    document.getElementById('evento-campo-titulo').value = e['Titulo'];
+    const fecha = e['Fecha'] ? new Date(e['Fecha']) : null;
+    document.getElementById('evento-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('evento-campo-tipo').value = e['Tipo'] || 'Otro';
+    document.getElementById('evento-campo-descripcion').value = e['Descripcion'] || '';
+    document.getElementById('evento-campo-visible').checked = e['Visible en dashboard'] === 'Si' || e['Visible en dashboard'] === true;
+    document.getElementById('evento-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('evento-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('evento-form-contenedor').style.display = 'block';
+    document.getElementById('form-evento').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionEvento() {
+    eventoEditandoId = null;
+    document.getElementById('form-evento').reset();
+    document.getElementById('evento-campo-id').value = '';
+    document.getElementById('evento-campo-visible').checked = true;
+    document.getElementById('evento-btn-guardar').textContent = 'Agregar evento';
+    document.getElementById('evento-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarEvento(id) {
+    if (!confirm('¿Eliminar este evento?')) return;
+    try {
+      const resp = await llamarAPI('deleteEventoCalendario', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Evento eliminado', 'ok');
+        await cargarCalendario();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarEvento(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('evento-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      titulo: document.getElementById('evento-campo-titulo').value.trim(),
+      fecha: document.getElementById('evento-campo-fecha').value,
+      tipo: document.getElementById('evento-campo-tipo').value,
+      descripcion: document.getElementById('evento-campo-descripcion').value.trim(),
+      visibleDashboard: document.getElementById('evento-campo-visible').checked
+    };
+
+    try {
+      let resp;
+      if (eventoEditandoId) {
+        payload.id = eventoEditandoId;
+        resp = await llamarAPI('updateEventoCalendario', payload);
+      } else {
+        resp = await llamarAPI('addEventoCalendario', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(eventoEditandoId ? 'Evento actualizado' : 'Evento agregado', 'ok');
+        cancelarEdicionEvento();
+        document.getElementById('evento-form-contenedor').style.display = 'none';
+        await cargarCalendario();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
   }
 
   function cerrarSesion() {
