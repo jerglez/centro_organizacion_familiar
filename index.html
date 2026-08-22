@@ -369,7 +369,8 @@
   form#form-meta,
   form#form-inventario,
   form#form-cuentapagar,
-  form#form-evento { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-evento,
+  form#form-presupuesto { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
@@ -380,7 +381,8 @@
   form#form-meta .campo-ancho,
   form#form-inventario .campo-ancho,
   form#form-cuentapagar .campo-ancho,
-  form#form-evento .campo-ancho { grid-column: 1 / -1; }
+  form#form-evento .campo-ancho,
+  form#form-presupuesto .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
@@ -391,7 +393,8 @@
   form#form-meta label,
   form#form-inventario label,
   form#form-cuentapagar label,
-  form#form-evento label {
+  form#form-evento label,
+  form#form-presupuesto label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -418,7 +421,9 @@
   form#form-cuentapagar input,
   form#form-cuentapagar select,
   form#form-evento input,
-  form#form-evento select {
+  form#form-evento select,
+  form#form-presupuesto input,
+  form#form-presupuesto select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -464,7 +469,8 @@
   #lista-metas,
   #lista-inventario,
   #lista-cuentaspagar,
-  #lista-calendario { list-style: none; margin: 0; padding: 0; }
+  #lista-calendario,
+  #lista-presupuestos-modulo { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
@@ -645,7 +651,8 @@
     form#form-meta,
     form#form-inventario,
     form#form-cuentapagar,
-    form#form-evento { grid-template-columns: 1fr; }
+    form#form-evento,
+    form#form-presupuesto { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -731,8 +738,8 @@
     <div class="menu-item" data-panel="prestamos" onclick="mostrarSeccion('prestamos')">
       <span class="punto punto-teal"></span>Préstamos
     </div>
-    <div class="menu-item proximamente">
-      <span class="punto punto-teal"></span>Presupuestos <em>(próximamente)</em>
+    <div class="menu-item" data-panel="presupuestos" onclick="mostrarSeccion('presupuestos')">
+      <span class="punto punto-teal"></span>Presupuestos
     </div>
     <div class="menu-item" data-panel="metas" onclick="mostrarSeccion('metas')">
       <span class="punto punto-teal"></span>Metas
@@ -798,7 +805,7 @@
   <section class="bloque">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
       <h3 style="margin:0;">Presupuesto por categoría</h3>
-      <button type="button" class="secundario" onclick="agregarPresupuestoRapido()">+ Nuevo</button>
+      <button type="button" class="secundario" onclick="irAAgregarPresupuesto()">+ Nuevo</button>
     </div>
     <div id="lista-presupuestos-dashboard"><p class="vacio">Cargando...</p></div>
   </section>
@@ -1167,6 +1174,59 @@
   </section>
   </div>
 
+  <div class="panel" id="panel-presupuestos">
+  <section class="bloque">
+    <h3>Presupuestos</h3>
+    <p class="vacio" style="text-align:left; margin:0 0 0.9rem;">Define un límite mensual por categoría de gasto — esto es lo mismo que ves en el Dashboard, en "Presupuesto por categoría".</p>
+
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-pres="mes" onclick="cambiarFiltroPresupuestos('mes')">Este mes</button>
+      <button type="button" class="filtro-btn" data-filtro-pres="todos" onclick="cambiarFiltroPresupuestos('todos')">Todos</button>
+    </div>
+
+    <ul id="lista-presupuestos-modulo" style="margin-bottom:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;"
+      onclick="cancelarEdicionPresupuesto(); document.getElementById('presupuesto-form-contenedor').style.display='block'; document.getElementById('form-presupuesto').scrollIntoView({behavior:'smooth'});">
+      + Nuevo presupuesto
+    </button>
+
+    <div id="presupuesto-form-contenedor" style="display:none;">
+    <form id="form-presupuesto" onsubmit="return guardarPresupuestoModulo(event)">
+      <input type="hidden" id="presupuesto-campo-id" value="">
+      <div class="campo-ancho">
+        <label for="presupuesto-campo-categoria">Categoría de gasto</label>
+        <select id="presupuesto-campo-categoria" required></select>
+      </div>
+      <div>
+        <label for="presupuesto-campo-mes">Mes</label>
+        <select id="presupuesto-campo-mes" required>
+          <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+          <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+          <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+          <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+        </select>
+      </div>
+      <div>
+        <label for="presupuesto-campo-anio">Año</label>
+        <input type="number" id="presupuesto-campo-anio" required>
+      </div>
+      <div class="campo-ancho">
+        <label for="presupuesto-campo-monto">Límite mensual (RD$)</label>
+        <input type="number" id="presupuesto-campo-monto" step="0.01" min="0" required>
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="presupuesto-btn-guardar" style="flex:1;">Agregar presupuesto</button>
+        <button type="button" class="secundario" id="presupuesto-btn-cancelar"
+          onclick="cancelarEdicionPresupuesto(); document.getElementById('presupuesto-form-contenedor').style.display='none';" style="display:none;">Cancelar</button>
+      </div>
+    </form>
+    </div>
+  </section>
+  </div>
+
   <div class="panel" id="panel-metas">
   <section class="bloque">
     <h3>Metas / Plan financiero</h3>
@@ -1527,7 +1587,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "16.0";
+  const VERSION_APP = "17.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -3248,6 +3308,8 @@
   let cuentaPorPagarPagandoId = null;
   let calendarioCache = [];
   let eventoEditandoId = null;
+  let presupuestoEditandoId = null;
+  let filtroPresupuestos = 'mes';
   let filtroCalendario = 'proximos';
   const CAMPOS_BLOQUEABLES_CXP = ['cxp-campo-nombre', 'cxp-campo-tipo', 'cxp-campo-corte', 'cxp-campo-fecha', 'cxp-campo-anticipacion'];
   let filtroCuentasPorPagar = 'activas';
@@ -3257,6 +3319,7 @@
     if (resp.ok) {
       presupuestosCache = resp.datos;
       renderizarPresupuestosDashboard();
+      renderizarPresupuestosModulo();
     }
   }
 
@@ -3364,40 +3427,13 @@
     });
   }
 
-  async function agregarPresupuestoRapido() {
-    const categoria = prompt('¿Para cuál categoría de gasto quieres definir un límite?\nEscribe el nombre exacto de la categoría:');
-    if (!categoria) return;
-    const existe = categoriasCache.some(c => c['Nombre'] === categoria && c['Tipo (ingreso/gasto)'] === 'gasto');
-    if (!existe) {
-      mostrarMensaje('Esa categoría de gasto no existe. Revisa el nombre exacto (Categorías → lista).', 'error');
-      return;
-    }
-    const montoStr = prompt('¿Cuál es el límite mensual para "' + categoria + '"? (RD$)');
-    if (!montoStr) return;
-    const monto = parseFloat(montoStr);
-    if (isNaN(monto) || monto <= 0) {
-      mostrarMensaje('El monto no es válido', 'error');
-      return;
-    }
-
-    const ahora = new Date();
-    try {
-      const resp = await llamarAPI('addPresupuesto', {
-        categoria: categoria,
-        montoLimite: monto,
-        mes: ahora.getMonth() + 1,
-        anio: ahora.getFullYear()
-      });
-      if (resp.ok) {
-        mostrarMensaje('Presupuesto agregado', 'ok');
-        await cargarPresupuestos();
-        actualizarUltimaSincronizacion();
-      } else {
-        mostrarMensaje('Error: ' + resp.error, 'error');
-      }
-    } catch (err) {
-      mostrarMensaje('No se pudo agregar: ' + err.message, 'error');
-    }
+  // El "+ Nuevo" del Dashboard ahora lleva al modulo Presupuestos real, con
+  // el formulario ya abierto y el selector de categoria (nunca texto libre).
+  function irAAgregarPresupuesto() {
+    mostrarSeccion('presupuestos');
+    cancelarEdicionPresupuesto();
+    document.getElementById('presupuesto-form-contenedor').style.display = 'block';
+    setTimeout(() => document.getElementById('form-presupuesto').scrollIntoView({ behavior: 'smooth' }), 150);
   }
 
   // ---------- Dashboard: ultimos 5 movimientos ----------
@@ -5298,6 +5334,178 @@
         cancelarEdicionEvento();
         document.getElementById('evento-form-contenedor').style.display = 'none';
         await cargarCalendario();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      boton.disabled = false;
+    }
+    return false;
+  }
+
+  // ---------- Modulo Presupuestos (relacionado al widget del Dashboard) ----------
+  function poblarSelectCategoriaPresupuesto() {
+    const select = document.getElementById('presupuesto-campo-categoria');
+    const valorPrevio = select.value;
+    const categoriasGasto = categoriasCache.filter(c => c['Tipo (ingreso/gasto)'] === 'gasto');
+    select.innerHTML = '';
+    if (categoriasGasto.length === 0) {
+      select.innerHTML = '<option value="">Crea una categoría de gasto primero</option>';
+      return;
+    }
+    categoriasGasto.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c['Nombre'];
+      opt.textContent = c['Nombre'];
+      select.appendChild(opt);
+    });
+    if (valorPrevio && categoriasGasto.some(c => c['Nombre'] === valorPrevio)) {
+      select.value = valorPrevio;
+    }
+  }
+
+  function cambiarFiltroPresupuestos(valor) {
+    filtroPresupuestos = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-pres]').forEach(b => {
+      b.classList.toggle('activo', b.dataset.filtroPres === valor);
+    });
+    renderizarPresupuestosModulo();
+  }
+
+  const NOMBRES_MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+  function renderizarPresupuestosModulo() {
+    poblarSelectCategoriaPresupuesto();
+    const lista = document.getElementById('lista-presupuestos-modulo');
+    if (!lista) return;
+    lista.innerHTML = '';
+
+    const ahora = new Date();
+    const mesActual = ahora.getMonth() + 1;
+    const anioActual = ahora.getFullYear();
+    const gastos = calcularGastosPorCategoria();
+
+    const filtrados = filtroPresupuestos === 'mes'
+      ? presupuestosCache.filter(p => parseInt(p['Mes']) === mesActual && parseInt(p['Anio']) === anioActual)
+      : presupuestosCache.slice();
+
+    if (filtrados.length === 0) {
+      lista.innerHTML = '<li class="vacio">' + (filtroPresupuestos === 'mes' ? 'No tienes presupuestos definidos este mes' : 'Aún no has creado ningún presupuesto') + '</li>';
+      return;
+    }
+
+    const ordenados = filtrados.sort((a, b) => (parseInt(b['Anio']) - parseInt(a['Anio'])) || (parseInt(b['Mes']) - parseInt(a['Mes'])));
+
+    ordenados.forEach(p => {
+      const limite = parseFloat(p['Monto limite']) || 0;
+      const esMesActual = parseInt(p['Mes']) === mesActual && parseInt(p['Anio']) === anioActual;
+      const gastado = esMesActual ? (gastos[p['Categoria']] || 0) : null;
+      const pct = (gastado !== null && limite > 0) ? Math.min(100, gastado / limite * 100) : null;
+
+      let badge = '';
+      if (pct !== null) {
+        if (pct >= 100) badge = ' <span class="badge-alerta exceso">Límite superado</span>';
+        else if (pct >= 90) badge = ' <span class="badge-alerta exceso">Alerta</span>';
+        else if (pct >= 70) badge = ' <span class="badge-alerta prealerta">Pre-alerta</span>';
+      }
+
+      const li = document.createElement('li');
+      li.style.display = 'block';
+      li.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="item-info" style="cursor:pointer;" onclick="editarPresupuestoModulo('${p['ID']}')" title="Clic para editar">
+            <div class="categoria">${p['Categoria']}${badge}</div>
+            <div class="detalle">${NOMBRES_MESES[parseInt(p['Mes'])] || p['Mes']} ${p['Anio']}${gastado !== null ? ' · Gastado: RD$' + gastado.toLocaleString('es-DO', {minimumFractionDigits:2}) : ''}</div>
+          </div>
+          <span class="item-monto cifra">RD$${limite.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button type="button" class="secundario" onclick="editarPresupuestoModulo('${p['ID']}')">Editar</button>
+          <button type="button" class="secundario" onclick="eliminarPresupuestoModulo('${p['ID']}')">Eliminar</button>
+        </div>
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  function editarPresupuestoModulo(id) {
+    const p = presupuestosCache.find(x => String(x['ID']) === String(id));
+    if (!p) return;
+    presupuestoEditandoId = id;
+    poblarSelectCategoriaPresupuesto();
+    document.getElementById('presupuesto-campo-id').value = id;
+    document.getElementById('presupuesto-campo-categoria').value = p['Categoria'];
+    document.getElementById('presupuesto-campo-mes').value = p['Mes'];
+    document.getElementById('presupuesto-campo-anio').value = p['Anio'];
+    document.getElementById('presupuesto-campo-monto').value = p['Monto limite'] || 0;
+    document.getElementById('presupuesto-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('presupuesto-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('presupuesto-form-contenedor').style.display = 'block';
+    document.getElementById('form-presupuesto').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionPresupuesto() {
+    presupuestoEditandoId = null;
+    document.getElementById('form-presupuesto').reset();
+    document.getElementById('presupuesto-campo-id').value = '';
+    const ahora = new Date();
+    document.getElementById('presupuesto-campo-mes').value = ahora.getMonth() + 1;
+    document.getElementById('presupuesto-campo-anio').value = ahora.getFullYear();
+    document.getElementById('presupuesto-btn-guardar').textContent = 'Agregar presupuesto';
+    document.getElementById('presupuesto-btn-cancelar').style.display = 'none';
+  }
+
+  async function eliminarPresupuestoModulo(id) {
+    if (!confirm('¿Eliminar este presupuesto?')) return;
+    try {
+      const resp = await llamarAPI('deletePresupuesto', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Presupuesto eliminado', 'ok');
+        await cargarPresupuestos();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al eliminar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo eliminar: ' + err.message, 'error');
+    }
+  }
+
+  async function guardarPresupuestoModulo(evento) {
+    evento.preventDefault();
+    const boton = document.getElementById('presupuesto-btn-guardar');
+    boton.disabled = true;
+
+    const payload = {
+      categoria: document.getElementById('presupuesto-campo-categoria').value,
+      mes: parseInt(document.getElementById('presupuesto-campo-mes').value, 10),
+      anio: parseInt(document.getElementById('presupuesto-campo-anio').value, 10),
+      montoLimite: parseFloat(document.getElementById('presupuesto-campo-monto').value) || 0
+    };
+
+    if (!payload.categoria) {
+      mostrarMensaje('Elige una categoría de gasto', 'error');
+      boton.disabled = false;
+      return false;
+    }
+
+    try {
+      let resp;
+      if (presupuestoEditandoId) {
+        payload.id = presupuestoEditandoId;
+        resp = await llamarAPI('updatePresupuesto', payload);
+      } else {
+        resp = await llamarAPI('addPresupuesto', payload);
+      }
+
+      if (resp.ok) {
+        mostrarMensaje(presupuestoEditandoId ? 'Presupuesto actualizado' : 'Presupuesto agregado', 'ok');
+        cancelarEdicionPresupuesto();
+        document.getElementById('presupuesto-form-contenedor').style.display = 'none';
+        await cargarPresupuestos();
         actualizarUltimaSincronizacion();
       } else {
         mostrarMensaje('Error: ' + resp.error, 'error');
