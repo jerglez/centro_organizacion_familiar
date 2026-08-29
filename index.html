@@ -874,6 +874,8 @@
     <h3>Movimientos recientes</h3>
     <div class="filtro-movimientos">
       <button type="button" class="filtro-btn activo" data-filtro="todos" onclick="cambiarFiltroMovimientos('todos')">Todos</button>
+      <button type="button" class="filtro-btn" data-filtro="hoy" onclick="cambiarFiltroMovimientos('hoy')">Hoy</button>
+      <button type="button" class="filtro-btn" data-filtro="ayer" onclick="cambiarFiltroMovimientos('ayer')">Ayer</button>
       <button type="button" class="filtro-btn" data-filtro="semana" onclick="cambiarFiltroMovimientos('semana')">Última semana</button>
       <button type="button" class="filtro-btn" data-filtro="mes" onclick="cambiarFiltroMovimientos('mes')">Este mes</button>
       <button type="button" class="filtro-btn" data-filtro="rango" onclick="cambiarFiltroMovimientos('rango')">Rango</button>
@@ -1270,6 +1272,10 @@
         <label for="meta-campo-fecha">Fecha límite (opcional)</label>
         <input type="date" id="meta-campo-fecha">
       </div>
+      <div class="campo-ancho">
+        <label for="meta-campo-nota">Nota (opcional)</label>
+        <input type="text" id="meta-campo-nota" placeholder="Cualquier comentario sobre esta meta">
+      </div>
       <div class="campo-ancho" style="display:flex; gap:0.5rem;">
         <button type="submit" class="guardar" id="meta-btn-guardar" style="flex:1;">Agregar meta</button>
         <button type="button" class="secundario" id="meta-btn-cancelar"
@@ -1587,7 +1593,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "17.0";
+  const VERSION_APP = "18.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1611,6 +1617,7 @@
   let notificacionesCache = [];
   let notificacionesDescartadasLocal = new Set(); // "reconocidas" en esta sesion, sin cerrar el panel
   let intervaloSincronizacion = null;
+  let contadorFallosSincronizacion = 0;
 
   function manejarLogin(response) {
     tokenActual = response.credential;
@@ -1739,9 +1746,10 @@
         // TODOS los reintentos terminen, no solo el primero.
         await new Promise(resolve => setTimeout(resolve, 2000));
         await cargarDatosSecundariosConReintento(intento + 1);
-      } else {
-        mostrarBannerErrorSync(err);
       }
+      // Si los 3 intentos fallan durante el arranque, no se muestra el banner
+      // aqui — solo queda en consola. La sincronizacion normal (cada 10s) ya
+      // avisara si el problema persiste de verdad mientras usas la app.
     }
   }
 
@@ -1765,16 +1773,22 @@
 
     // Todo va dentro de un try/catch: si algo falla (sin internet, Apps Script
     // caido, etc.) el usuario ve un aviso claro con boton de reintentar, en
-    // vez de quedarse con datos desactualizados sin saber por que.
+    // vez de quedarse con datos desactualizados sin saber por que. Pero solo
+    // se muestra si el fallo se repite 2 veces seguidas — un solo tropiezo
+    // pasajero no debe alarmar a nadie.
     try {
       await cargarDatosEsenciales();
       await cargarDatosSecundarios();
       actualizarUltimaSincronizacion();
+      contadorFallosSincronizacion = 0;
       document.getElementById('banner-error-sync').style.display = 'none';
       return true;
     } catch (err) {
       console.error('Error al sincronizar datos:', err);
-      mostrarBannerErrorSync(err);
+      contadorFallosSincronizacion++;
+      if (contadorFallosSincronizacion >= 2) {
+        mostrarBannerErrorSync(err);
+      }
       return false;
     }
   }
@@ -2176,8 +2190,15 @@
   function crearFilaCuenta(cuenta) {
     const saldo = calcularSaldoCuenta(cuenta['Nombre']);
     const esPasivo = cuenta['Tipo'] === 'Tarjeta de credito';
+    // "Debes" (tarjeta) es normal que sea positivo (deuda) — rojo si > 0.
+    // "Saldo" (todo lo demas) es normal que sea positivo — rojo si < 0
+    // (y en ese caso SI se muestra el signo negativo, para que no se confunda
+    // con un saldo positivo mostrado en verde).
     const etiquetaMonto = esPasivo ? 'Debes' : 'Saldo';
-    const colorMonto = esPasivo && saldo > 0 ? 'gasto' : 'ingreso';
+    const colorMonto = esPasivo
+      ? (saldo > 0 ? 'gasto' : 'ingreso')
+      : (saldo < 0 ? 'gasto' : 'ingreso');
+    const signoMonto = saldo < 0 ? '-' : '';
     const activa = esCuentaActiva(cuenta);
 
     let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
@@ -2212,7 +2233,7 @@
           <div class="detalle">${detalleExtra}</div>
         </div>
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-          <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+          <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: ${signoMonto}RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
           <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
           <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
           <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
@@ -2259,24 +2280,31 @@
   // Junta transacciones y transferencias de una cuenta especifica, ordenadas
   // por fecha, mas recientes primero.
   function renderizarHistorialCuenta(cont, nombreCuenta, id) {
+    const cuenta = cuentasCache.find(c => c['Nombre'] === nombreCuenta);
+    const esPasivo = cuenta && cuenta['Tipo'] === 'Tarjeta de credito';
     const movimientos = [];
 
     transaccionesCache.forEach(t => {
       if (t['Cuenta'] !== nombreCuenta) return;
+      const monto = parseFloat(t['Monto']) || 0;
+      const esIngreso = t['Tipo (ingreso/gasto)'] === 'ingreso';
+      // "efecto" es el impacto real sobre el balance (igual formula que
+      // calcularSaldoCuenta) — no solo si fue ingreso/gasto en abstracto.
+      const efecto = esPasivo ? (esIngreso ? -monto : monto) : (esIngreso ? monto : -monto);
       movimientos.push({
         fecha: t['Fecha'] ? new Date(t['Fecha']) : null,
         texto: (t['Categoria'] || 'Sin categoría') + ' · ' + (t['Descripcion'] || t['Comercio'] || ''),
-        monto: parseFloat(t['Monto']) || 0,
-        tipo: t['Tipo (ingreso/gasto)']
+        efecto: efecto
       });
     });
 
     transferenciasCache.forEach(tr => {
+      const monto = parseFloat(tr['Monto']) || 0;
       if (tr['Cuenta origen'] === nombreCuenta) {
-        movimientos.push({ fecha: tr['Fecha'] ? new Date(tr['Fecha']) : null, texto: 'Transferencia a ' + tr['Cuenta destino'], monto: parseFloat(tr['Monto']) || 0, tipo: 'gasto' });
+        movimientos.push({ fecha: tr['Fecha'] ? new Date(tr['Fecha']) : null, texto: 'Transferencia a ' + tr['Cuenta destino'], efecto: esPasivo ? monto : -monto });
       }
       if (tr['Cuenta destino'] === nombreCuenta) {
-        movimientos.push({ fecha: tr['Fecha'] ? new Date(tr['Fecha']) : null, texto: 'Transferencia desde ' + tr['Cuenta origen'], monto: parseFloat(tr['Monto']) || 0, tipo: 'ingreso' });
+        movimientos.push({ fecha: tr['Fecha'] ? new Date(tr['Fecha']) : null, texto: 'Transferencia desde ' + tr['Cuenta origen'], efecto: esPasivo ? -monto : monto });
       }
     });
 
@@ -2290,13 +2318,26 @@
     const cantidad = cuentasHistorialCantidad[id] || HISTORIAL_CUENTA_POR_PAGINA;
     const visibles = movimientos.slice(0, cantidad);
 
-    let html = visibles.map(m => {
+    // Balance corriendo: se parte del saldo ACTUAL (que corresponde al
+    // movimiento mas reciente) y se retrocede restando el efecto de cada uno,
+    // para saber cual era el balance justo despues del movimiento anterior.
+    let balanceCorriendo = calcularSaldoCuenta(nombreCuenta);
+
+    let html = `<div style="display:flex; justify-content:flex-end; gap:8px; font-size:0.68rem; font-weight:700; color:var(--texto-secundario); margin-bottom:4px;">
+      <span style="width:90px; text-align:right;">Monto</span>
+      <span style="width:100px; text-align:right;">Balance</span>
+    </div>`;
+
+    html += visibles.map(m => {
       const fechaTexto = m.fecha ? m.fecha.toLocaleDateString('es-DO') : '';
-      const color = m.tipo === 'ingreso' ? 'var(--verde)' : 'var(--coral)';
-      const signo = m.tipo === 'ingreso' ? '+' : '-';
-      return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
-        <span>${m.texto} · ${fechaTexto}</span>
-        <span class="cifra" style="color:${color};">${signo}RD$${m.monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      const color = m.efecto >= 0 ? 'var(--verde)' : 'var(--coral)';
+      const signo = m.efecto >= 0 ? '+' : '-';
+      const balanceDespues = balanceCorriendo;
+      balanceCorriendo -= m.efecto; // retrocede al balance de ANTES de este movimiento
+      return `<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; padding:4px 0; gap:8px;">
+        <span style="flex:1;">${m.texto} · ${fechaTexto}</span>
+        <span class="cifra" style="color:${color}; width:90px; text-align:right;">${signo}RD$${Math.abs(m.efecto).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        <span class="cifra" style="width:100px; text-align:right; color:var(--texto-secundario);">RD$${balanceDespues.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
       </div>`;
     }).join('');
 
@@ -3105,6 +3146,14 @@
     if (filtroMovimientos === 'todos') return true;
     if (!fecha) return false;
     const ahora = new Date();
+    if (filtroMovimientos === 'hoy') {
+      return fecha.getDate() === ahora.getDate() && fecha.getMonth() === ahora.getMonth() && fecha.getFullYear() === ahora.getFullYear();
+    }
+    if (filtroMovimientos === 'ayer') {
+      const ayer = new Date(ahora);
+      ayer.setDate(ahora.getDate() - 1);
+      return fecha.getDate() === ayer.getDate() && fecha.getMonth() === ayer.getMonth() && fecha.getFullYear() === ayer.getFullYear();
+    }
     if (filtroMovimientos === 'semana') {
       const haceUnaSemana = new Date(ahora);
       haceUnaSemana.setDate(ahora.getDate() - 7);
@@ -3183,10 +3232,10 @@
         ? `<button type="button" class="btn-editar-mov" onclick="editarTransaccion('${t['ID']}')" title="Editar este movimiento">📝</button>`
         : '';
       li.innerHTML = `
-        <div class="item-info" style="cursor:pointer;" onclick="toggleCuentaMovimiento('${t['ID']}')" title="Clic para ver la cuenta">
+        <div class="item-info">
           <div class="categoria">${t['Categoria'] || 'Sin categoría'}</div>
           <div class="detalle">${t['Descripcion'] || t['Comercio'] || ''} ${fecha ? '· ' + fecha : ''}</div>
-          <div class="detalle" id="cuenta-mov-${t['ID']}" style="display:none; color:var(--teal);">Cuenta: ${t['Cuenta'] || 'Sin especificar'}</div>
+          <div class="detalle" style="color:var(--teal);">Cuenta: ${t['Cuenta'] || 'Sin especificar'}</div>
         </div>
         <div style="display:flex; flex-direction:column; align-items:flex-end; gap:2px;">
           <div class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
@@ -4204,6 +4253,8 @@
         <div class="detalle" style="margin-bottom:6px;">
           ${meta['Tipo'] === 'Deuda' ? 'Pago de deuda' : 'Ahorro'} · ${fecha}${tieneCuenta ? ' · Cuenta: ' + meta['Cuenta asociada'] : ''}
         </div>
+        ${meta['Tipo'] === 'Deuda' ? `<div class="detalle" style="margin-bottom:6px; color:var(--coral);">Balance pendiente a pagar: RD$${Math.max(0, actual - objetivo).toLocaleString('es-DO', {minimumFractionDigits:2})}</div>` : ''}
+        ${meta['Nota'] ? `<div class="detalle" style="margin-bottom:6px; font-style:italic;">${meta['Nota']}</div>` : ''}
         <div class="barra-categoria">
           <div class="fila-etiqueta">
             <span>RD$${actual.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
@@ -4257,6 +4308,7 @@
     document.getElementById('meta-campo-manual').value = meta['Monto actual'] || 0;
     const fecha = meta['Fecha limite'] ? new Date(meta['Fecha limite']) : null;
     document.getElementById('meta-campo-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('meta-campo-nota').value = meta['Nota'] || '';
     actualizarCamposMeta();
     document.getElementById('meta-btn-guardar').textContent = 'Guardar cambios';
     document.getElementById('meta-btn-cancelar').style.display = 'inline-block';
@@ -4301,7 +4353,8 @@
       cuentaAsociada: cuenta,
       montoObjetivo: parseFloat(document.getElementById('meta-campo-objetivo').value) || 0,
       montoActualManual: cuenta ? '' : (parseFloat(document.getElementById('meta-campo-manual').value) || 0),
-      fechaLimite: document.getElementById('meta-campo-fecha').value
+      fechaLimite: document.getElementById('meta-campo-fecha').value,
+      nota: document.getElementById('meta-campo-nota').value.trim()
     };
 
     try {
