@@ -970,11 +970,11 @@
     <div class="filtro-movimientos">
       <button type="button" class="filtro-btn activo" data-filtro-estado-cuenta="activas" onclick="cambiarFiltroEstadoCuenta('activas')">Cuentas activas</button>
       <button type="button" class="filtro-btn" data-filtro-estado-cuenta="cerradas" onclick="cambiarFiltroEstadoCuenta('cerradas')">Cuentas cerradas</button>
-      <button type="button" class="filtro-btn" style="margin-left:auto;"
-        onclick="cancelarEdicionCuenta(); document.getElementById('cuenta-form-contenedor').style.display='block'; document.getElementById('form-cuenta').scrollIntoView({behavior:'smooth'});">
-        + Nueva cuenta
-      </button>
     </div>
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;"
+      onclick="cancelarEdicionCuenta(); document.getElementById('cuenta-form-contenedor').style.display='block'; document.getElementById('form-cuenta').scrollIntoView({behavior:'smooth'});">
+      + Nueva cuenta
+    </button>
     <div id="cuenta-form-contenedor" style="display:none;">
     <form id="form-cuenta" onsubmit="return guardarCuenta(event)">
       <input type="hidden" id="cuenta-campo-id" value="">
@@ -1593,7 +1593,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "18.0";
+  const VERSION_APP = "19.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1617,7 +1617,7 @@
   let notificacionesCache = [];
   let notificacionesDescartadasLocal = new Set(); // "reconocidas" en esta sesion, sin cerrar el panel
   let intervaloSincronizacion = null;
-  let contadorFallosSincronizacion = 0;
+  let horaInicioSesion = null; // se marca al mostrar el Dashboard; define el "periodo de gracia" de 1 minuto
 
   function manejarLogin(response) {
     tokenActual = response.credential;
@@ -1675,6 +1675,7 @@
 
       document.getElementById('loading-screen').style.display = 'none';
       document.getElementById('app-screen').style.display = 'block';
+      horaInicioSesion = Date.now();
       document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
       document.getElementById('rol').textContent = datosUsuario.datos.rol;
 
@@ -1772,21 +1773,20 @@
     if (escribiendoEnFormulario) return true;
 
     // Todo va dentro de un try/catch: si algo falla (sin internet, Apps Script
-    // caido, etc.) el usuario ve un aviso claro con boton de reintentar, en
-    // vez de quedarse con datos desactualizados sin saber por que. Pero solo
-    // se muestra si el fallo se repite 2 veces seguidas — un solo tropiezo
-    // pasajero no debe alarmar a nadie.
+    // caido, etc.). Durante el primer minuto desde que se inicio sesion, un
+    // fallo se queda en silencio (dando tiempo a que termine de "asentarse").
+    // Pasado ese minuto, esto corre cada 10 segundos para sentirse "en tiempo
+    // real" — asi que ahi CUALQUIER fallo muestra el aviso de inmediato.
     try {
       await cargarDatosEsenciales();
       await cargarDatosSecundarios();
       actualizarUltimaSincronizacion();
-      contadorFallosSincronizacion = 0;
       document.getElementById('banner-error-sync').style.display = 'none';
       return true;
     } catch (err) {
       console.error('Error al sincronizar datos:', err);
-      contadorFallosSincronizacion++;
-      if (contadorFallosSincronizacion >= 2) {
+      const dentroDelPeriodoDeGracia = horaInicioSesion && (Date.now() - horaInicioSesion) < 60000;
+      if (!dentroDelPeriodoDeGracia) {
         mostrarBannerErrorSync(err);
       }
       return false;
@@ -2232,14 +2232,16 @@
           <div class="categoria">${cuenta['Nombre']}</div>
           <div class="detalle">${detalleExtra}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div style="display:flex; align-items:center; gap:10px;">
           <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: ${signoMonto}RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
-          <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
-          <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
-          <button type="button" class="secundario" onclick="editarCuenta('${cuenta['ID']}')">Editar</button>
-          ${botonCerrarReabrir}
-          <button type="button" class="secundario" onclick="eliminarCuenta('${cuenta['ID']}')">Eliminar</button>
+          <button type="button" class="btn-editar-mov" onclick="editarCuenta('${cuenta['ID']}')" title="Editar">✏️</button>
+          <button type="button" class="btn-editar-mov" onclick="eliminarCuenta('${cuenta['ID']}')" title="Eliminar">🗑️</button>
         </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
+        <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
+        <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
+        ${botonCerrarReabrir}
       </div>
       <div id="historial-cuenta-${cuenta['ID']}" style="display:${historialAbierto ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
     `;
@@ -2274,7 +2276,13 @@
   function verMasHistorialCuenta(id) {
     id = String(id);
     cuentasHistorialCantidad[id] = (cuentasHistorialCantidad[id] || HISTORIAL_CUENTA_POR_PAGINA) + HISTORIAL_CUENTA_POR_PAGINA;
-    renderizarCuentas();
+    // Este historial se reutiliza tanto en Cuentas como en el historial de
+    // una Meta vinculada a una cuenta — hay que refrescar el modulo correcto.
+    if (id.indexOf('meta-') === 0) {
+      renderizarMetas();
+    } else {
+      renderizarCuentas();
+    }
   }
 
   // Junta transacciones y transferencias de una cuenta especifica, ordenadas
@@ -2335,7 +2343,7 @@
       const balanceDespues = balanceCorriendo;
       balanceCorriendo -= m.efecto; // retrocede al balance de ANTES de este movimiento
       return `<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; padding:4px 0; gap:8px;">
-        <span style="flex:1;">${m.texto} · ${fechaTexto}</span>
+        <span style="flex:1; min-width:0; overflow-wrap:break-word;">${m.texto} · ${fechaTexto}</span>
         <span class="cifra" style="color:${color}; width:90px; text-align:right;">${signo}RD$${Math.abs(m.efecto).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         <span class="cifra" style="width:100px; text-align:right; color:var(--texto-secundario);">RD$${balanceDespues.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
       </div>`;
@@ -4226,6 +4234,28 @@
     return { actual, objetivo, porcentaje: Math.max(0, Math.min(100, porcentaje)) };
   }
 
+  let metasHistorialAbierto = new Set();
+
+  function toggleHistorialMeta(id) {
+    id = String(id);
+    if (metasHistorialAbierto.has(id)) metasHistorialAbierto.delete(id);
+    else metasHistorialAbierto.add(id);
+    renderizarMetas();
+  }
+
+  // Si la meta esta vinculada a una cuenta, reutiliza el mismo historial real
+  // de esa cuenta (transacciones + transferencias) — eso es lo que en verdad
+  // esta moviendo el progreso de la meta. Si es manual, no hay como mostrar
+  // un historial automatico (los cambios de "Actualizar avance" no se
+  // registran aparte), asi que se explica en vez de mostrar una lista vacia.
+  function renderizarHistorialMeta(cont, meta) {
+    if (meta['Cuenta asociada']) {
+      renderizarHistorialCuenta(cont, meta['Cuenta asociada'], 'meta-' + meta['ID']);
+    } else {
+      cont.innerHTML = '<p class="vacio">Esta meta no tiene una cuenta vinculada, así que no hay un historial automático — usa "Actualizar avance" para modificarla a mano.</p>';
+    }
+  }
+
   function renderizarMetas() {
     const lista = document.getElementById('lista-metas');
     lista.innerHTML = '';
@@ -4234,21 +4264,33 @@
       return;
     }
 
-    metasCache.forEach(meta => {
+    metasCache.forEach((meta, indice) => {
       const { actual, objetivo, porcentaje } = calcularProgresoMeta(meta);
       const cumplida = porcentaje >= 100;
       const fecha = meta['Fecha limite'] ? new Date(meta['Fecha limite']).toLocaleDateString('es-DO') : 'Sin fecha límite';
       const tieneCuenta = !!meta['Cuenta asociada'];
+      const esUltima = indice === metasCache.length - 1;
+      const historialAbierto = metasHistorialAbierto.has(String(meta['ID']));
 
       const li = document.createElement('li');
       li.style.display = 'block';
+      // Separacion clara entre una meta y la siguiente, para que no se
+      // confunda a cual meta pertenecen los botones.
+      if (!esUltima) {
+        li.style.borderBottom = '1px solid var(--borde)';
+        li.style.paddingBottom = '1rem';
+        li.style.marginBottom = '1rem';
+      }
       const botonAvance = (!tieneCuenta && !cumplida)
         ? `<button type="button" class="secundario" onclick="actualizarAvanceMeta('${meta['ID']}')">Actualizar avance</button>`
         : '';
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div class="categoria">${meta['Nombre']} ${cumplida ? '<span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Cumplida ✓</span>' : ''}</div>
-          <span class="cifra" style="font-weight:600;">${porcentaje.toFixed(0)}%</span>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="cifra" style="font-weight:600;">${porcentaje.toFixed(0)}%</span>
+            <button type="button" class="btn-editar-mov" onclick="eliminarMeta('${meta['ID']}')" title="Eliminar">🗑️</button>
+          </div>
         </div>
         <div class="detalle" style="margin-bottom:6px;">
           ${meta['Tipo'] === 'Deuda' ? 'Pago de deuda' : 'Ahorro'} · ${fecha}${tieneCuenta ? ' · Cuenta: ' + meta['Cuenta asociada'] : ''}
@@ -4264,10 +4306,17 @@
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           ${botonAvance}
+          <button type="button" class="secundario" onclick="toggleHistorialMeta('${meta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
           <button type="button" class="secundario" onclick="editarMeta('${meta['ID']}')">Editar</button>
-          <button type="button" class="secundario" onclick="eliminarMeta('${meta['ID']}')">Eliminar</button>
         </div>
+        <div id="historial-meta-${meta['ID']}" style="display:${historialAbierto ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
       `;
+
+      if (historialAbierto) {
+        const contHistorial = li.querySelector('#historial-meta-' + meta['ID']);
+        renderizarHistorialMeta(contHistorial, meta);
+      }
+
       lista.appendChild(li);
     });
   }
@@ -5573,6 +5622,7 @@
 
   function cerrarSesion() {
     tokenActual = null;
+    horaInicioSesion = null;
     idsNotificadosLocalmente = new Set();
     primeraCargaNotificaciones = true;
     if (intervaloSincronizacion) {
