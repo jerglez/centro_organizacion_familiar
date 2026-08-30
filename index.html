@@ -281,6 +281,7 @@
     color: var(--teal-oscuro);
     padding: 0.85rem 0 0.5rem;
     margin-top: 0.4rem;
+    text-align: left;
     border-bottom: 2px solid var(--teal-claro);
   }
   .grupo-tipo-cuenta:first-child { margin-top: 0; }
@@ -470,7 +471,8 @@
   #lista-inventario,
   #lista-cuentaspagar,
   #lista-calendario,
-  #lista-presupuestos-modulo { list-style: none; margin: 0; padding: 0; }
+  #lista-presupuestos-modulo,
+  #lista-cuentas { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
@@ -606,7 +608,14 @@
     padding: 1px 7px;
     border-radius: 999px;
     margin-left: 6px;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
+  /* El titulo y su badge (Pre-alerta/Alerta/Pagado/etc.) siempre quedan en
+     la misma fila — si no cabe, se acorta el titulo con "...", el badge
+     nunca baja de linea. */
+  .fila-titulo-badge { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; }
+  .fila-titulo-badge .texto-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   .badge-alerta.prealerta { background: #FBF0DD; color: var(--mango); }
   .badge-alerta.alerta { background: #F7E4D6; color: #C8763E; }
   .badge-alerta.exceso { background: var(--coral-fondo); color: var(--coral); }
@@ -708,7 +717,7 @@
     </div>
   </header>
 
-  <div id="banner-error-sync" style="display:none; background:var(--coral-fondo); color:var(--coral); border-radius:8px; padding:0.7rem 0.9rem; margin-bottom:1rem; font-size:0.85rem; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+  <div id="banner-error-sync" style="display:none; background:var(--coral-fondo); color:var(--coral); border-radius:8px; padding:0.7rem 0.9rem; margin-bottom:1rem; font-size:0.85rem; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
     <span>No se pudo actualizar la información. <span id="banner-error-detalle" style="opacity:0.85;"></span></span>
     <button type="button" class="secundario" onclick="sincronizarDatos()" style="flex-shrink:0;">Reintentar</button>
   </div>
@@ -1593,7 +1602,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "20.0";
+  const VERSION_APP = "21.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2202,13 +2211,14 @@
     const activa = esCuentaActiva(cuenta);
 
     let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
+    let badgeCuenta = '';
     if (!activa) {
-      detalleExtra = '<span class="badge-alerta prealerta">Cerrada</span> ' + detalleExtra;
+      badgeCuenta = '<span class="badge-alerta prealerta">Cerrada</span>';
     } else if (esPasivo) {
       const estadoTarjeta = calcularEstadoTarjeta(cuenta);
       if (estadoTarjeta) {
         const clase = estadoTarjeta.nivel === 'pre' ? 'prealerta' : 'exceso';
-        detalleExtra = `<span class="badge-alerta ${clase}">${estadoTarjeta.texto}</span> ` + detalleExtra;
+        badgeCuenta = `<span class="badge-alerta ${clase}">${estadoTarjeta.texto}</span>`;
       }
     }
     if (cuenta['Tipo'] === 'Inversion') {
@@ -2219,8 +2229,8 @@
     }
 
     const botonCerrarReabrir = activa
-      ? `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', false)">Cerrar cuenta</button>`
-      : `<button type="button" class="secundario" onclick="toggleActivoCuenta('${cuenta['ID']}', true)">Reabrir cuenta</button>`;
+      ? `<button type="button" class="btn-editar-mov" onclick="toggleActivoCuenta('${cuenta['ID']}', false)" title="Cerrar cuenta">🔒</button>`
+      : `<button type="button" class="btn-editar-mov" onclick="toggleActivoCuenta('${cuenta['ID']}', true)" title="Reabrir cuenta">🔓</button>`;
 
     const historialAbierto = cuentasHistorialAbierto.has(String(cuenta['ID']));
 
@@ -2229,19 +2239,19 @@
     li.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
         <div class="item-info" style="cursor:pointer;" onclick="editarCuenta('${cuenta['ID']}')" title="Clic para ver y editar los datos">
-          <div class="categoria">${cuenta['Nombre']}</div>
+          <div class="categoria fila-titulo-badge"><span class="texto-titulo">${cuenta['Nombre']}</span>${badgeCuenta}</div>
           <div class="detalle">${detalleExtra}</div>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
           <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: ${signoMonto}RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
           <button type="button" class="btn-editar-mov" onclick="editarCuenta('${cuenta['ID']}')" title="Editar">✏️</button>
+          ${botonCerrarReabrir}
           <button type="button" class="btn-editar-mov" onclick="eliminarCuenta('${cuenta['ID']}')" title="Eliminar">🗑️</button>
         </div>
       </div>
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
         <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
         <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
-        ${botonCerrarReabrir}
       </div>
       <div id="historial-cuenta-${cuenta['ID']}" style="display:${historialAbierto ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
     `;
@@ -2808,7 +2818,7 @@
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div class="item-info" style="cursor:pointer;" onclick="${pagado ? `toggleHistorialPrestamo('${p['ID']}')` : `prepararPagoPrestamo('${p['ID']}')`}" title="${pagado ? 'Clic para ver el historial' : 'Clic para registrar un pago'}">
-            <div class="categoria">${p['Nombre']}${etiquetaPagado}</div>
+            <div class="categoria fila-titulo-badge"><span class="texto-titulo">${p['Nombre']}</span>${etiquetaPagado}</div>
             <div class="detalle">Cuota RD$${cuota.toLocaleString('es-DO', {minimumFractionDigits:2})} · Próximo pago: ${proxima}${tasa ? ' · Tasa ' + tasa + '% anual' : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
@@ -4295,7 +4305,7 @@
         : '';
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div class="categoria">${meta['Nombre']} ${cumplida ? '<span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Cumplida ✓</span>' : ''}</div>
+          <div class="categoria fila-titulo-badge"><span class="texto-titulo">${meta['Nombre']}</span>${cumplida ? '<span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Cumplida ✓</span>' : ''}</div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="cifra" style="font-weight:600;">${porcentaje.toFixed(0)}%</span>
             <button type="button" class="btn-editar-mov" onclick="eliminarMeta('${meta['ID']}')" title="Eliminar">🗑️</button>
@@ -5093,7 +5103,7 @@
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div class="item-info" style="cursor:pointer;" onclick="editarCuentaPorPagar('${c['ID']}')" title="Clic para ver y editar">
-            <div class="categoria">${c['Nombre']}${etiqueta}</div>
+            <div class="categoria fila-titulo-badge"><span class="texto-titulo">${c['Nombre']}</span>${etiqueta}</div>
             <div class="detalle">${c['Tipo'] || 'Servicio'} · vence: ${fechaTexto}${c['Cuenta asociada'] ? ' · ' + c['Cuenta asociada'] : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
@@ -5552,7 +5562,7 @@
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div class="item-info" style="cursor:pointer;" onclick="editarPresupuestoModulo('${p['ID']}')" title="Clic para editar">
-            <div class="categoria">${p['Categoria']}${badge}</div>
+            <div class="categoria fila-titulo-badge"><span class="texto-titulo">${p['Categoria']}</span>${badge}</div>
             <div class="detalle">${NOMBRES_MESES[parseInt(p['Mes'])] || p['Mes']} ${p['Anio']}${gastado !== null ? ' · Gastado: RD$' + gastado.toLocaleString('es-DO', {minimumFractionDigits:2}) : ''}</div>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
