@@ -1602,7 +1602,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "21.0";
+  const VERSION_APP = "21.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2242,16 +2242,16 @@
           <div class="categoria fila-titulo-badge"><span class="texto-titulo">${cuenta['Nombre']}</span>${badgeCuenta}</div>
           <div class="detalle">${detalleExtra}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px;">
-          <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: ${signoMonto}RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
-          <button type="button" class="btn-editar-mov" onclick="editarCuenta('${cuenta['ID']}')" title="Editar">✏️</button>
-          ${botonCerrarReabrir}
-          <button type="button" class="btn-editar-mov" onclick="eliminarCuenta('${cuenta['ID']}')" title="Eliminar">🗑️</button>
-        </div>
+        <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: ${signoMonto}RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
       </div>
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px;">
         <button type="button" class="secundario" onclick="ajustarSaldoCuenta('${cuenta['ID']}')">Ajustar saldo</button>
         <button type="button" class="secundario" onclick="toggleHistorialCuenta('${cuenta['ID']}')">${historialAbierto ? 'Ocultar historial' : 'Ver historial'}</button>
+        <div style="display:flex; align-items:center; gap:10px; margin-left:auto;">
+          <button type="button" class="btn-editar-mov" onclick="editarCuenta('${cuenta['ID']}')" title="Editar">✏️</button>
+          ${botonCerrarReabrir}
+          <button type="button" class="btn-editar-mov" onclick="eliminarCuenta('${cuenta['ID']}')" title="Eliminar">🗑️</button>
+        </div>
       </div>
       <div id="historial-cuenta-${cuenta['ID']}" style="display:${historialAbierto ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
     `;
