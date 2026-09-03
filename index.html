@@ -42,12 +42,32 @@
     --rojo: var(--coral);
     --rojo-fondo: var(--coral-fondo);
   }
+
+  /* Modo oscuro: mismas variables, solo cambian los valores. Todo el resto
+     del CSS ya usa var(--fondo), var(--superficie), etc. — asi que no hay
+     que tocar nada mas para que se adapte. */
+  body.modo-oscuro {
+    --teal: #4FB3A9;
+    --teal-oscuro: #7FD4CB;
+    --teal-claro: #16302E;
+    --verde: #5BC793;
+    --verde-fondo: #16302A;
+    --coral: #E58775;
+    --coral-fondo: #3A2320;
+    --mango: #E8B368;
+    --fondo: #14181A;
+    --superficie: #1E2426;
+    --texto: #EAEDEC;
+    --texto-secundario: #9AA6A2;
+    --borde: #333B3D;
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--fondo);
     color: var(--texto);
+    transition: background-color 0.2s ease, color 0.2s ease;
     min-height: 100vh;
     /* En iPhone instalado como PWA, el contenido puede dibujarse debajo del
        notch/reloj (por viewport-fit=cover). env(safe-area-inset-*) reserva
@@ -616,7 +636,7 @@
      nunca baja de linea. */
   .fila-titulo-badge { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; }
   .fila-titulo-badge .texto-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .badge-alerta.prealerta { background: #FBF0DD; color: var(--mango); }
+  .badge-alerta.prealerta { background: color-mix(in srgb, var(--mango) 20%, var(--superficie)); color: var(--mango); }
   .badge-alerta.alerta { background: #F7E4D6; color: #C8763E; }
   .badge-alerta.exceso { background: var(--coral-fondo); color: var(--coral); }
 
@@ -700,6 +720,7 @@
     </div>
     <div class="acciones-header">
       <span id="ultima-sync" class="texto-sync"></span>
+      <button class="btn-campana" onclick="toggleModoOscuro()" aria-label="Modo oscuro" id="btn-modo-oscuro">🌙</button>
       <div style="position:relative;">
         <button class="btn-campana" onclick="toggleCampanaNotificaciones()" aria-label="Novedades">
           🔔
@@ -1300,6 +1321,7 @@
     <h3>Reportes</h3>
     <div class="filtro-movimientos">
       <button type="button" class="filtro-btn activo" data-reporte="categorias" onclick="cambiarVistaReporte('categorias')">Gastos por categoría</button>
+      <button type="button" class="filtro-btn" data-reporte="pastel" onclick="cambiarVistaReporte('pastel')">Distribución</button>
       <button type="button" class="filtro-btn" data-reporte="ingresosgastos" onclick="cambiarVistaReporte('ingresosgastos')">Ingresos vs Gastos</button>
       <button type="button" class="filtro-btn" data-reporte="patrimonio" onclick="cambiarVistaReporte('patrimonio')">Patrimonio neto</button>
       <button type="button" class="filtro-btn" data-reporte="anual" onclick="cambiarVistaReporte('anual')">Resumen anual</button>
@@ -1311,6 +1333,23 @@
         <select id="reporte-campo-categoria" onchange="renderizarReporteCategorias()" style="width:100%; padding:0.55rem 0.6rem; border-radius:8px; border:1px solid var(--borde);"></select>
       </div>
       <div id="chart-reporte-categorias"><p class="vacio">Cargando...</p></div>
+    </div>
+
+    <div class="vista-reporte" id="reporte-pastel" style="display:none;">
+      <div style="display:flex; gap:0.5rem; margin-bottom:0.9rem;">
+        <select id="pastel-campo-mes" onchange="renderizarReportePastel()" style="flex:1; padding:0.55rem 0.6rem; border-radius:8px; border:1px solid var(--borde);">
+          <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+          <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+          <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+          <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+        </select>
+        <select id="pastel-campo-anio" onchange="renderizarReportePastel()" style="flex:1; padding:0.55rem 0.6rem; border-radius:8px; border:1px solid var(--borde);"></select>
+      </div>
+      <div class="filtro-movimientos">
+        <button type="button" class="filtro-btn activo" data-pastel-tipo="gasto" onclick="cambiarTipoPastel('gasto')">Gastos</button>
+        <button type="button" class="filtro-btn" data-pastel-tipo="ingreso" onclick="cambiarTipoPastel('ingreso')">Ingresos</button>
+      </div>
+      <div id="chart-reporte-pastel"><p class="vacio">Cargando...</p></div>
     </div>
 
     <div class="vista-reporte" id="reporte-ingresosgastos" style="display:none;">
@@ -1602,7 +1641,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "21.1";
+  const VERSION_APP = "22.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1627,6 +1666,25 @@
   let notificacionesDescartadasLocal = new Set(); // "reconocidas" en esta sesion, sin cerrar el panel
   let intervaloSincronizacion = null;
   let horaInicioSesion = null; // se marca al mostrar el Dashboard; define el "periodo de gracia" de 1 minuto
+
+  // ---------- Modo oscuro ----------
+  function aplicarModoOscuro(activar) {
+    document.body.classList.toggle('modo-oscuro', activar);
+    document.getElementById('btn-modo-oscuro').textContent = activar ? '☀️' : '🌙';
+    try { localStorage.setItem('modoOscuro', activar ? '1' : '0'); } catch (err) { /* si el navegador bloquea localStorage, no es critico */ }
+  }
+
+  function toggleModoOscuro() {
+    aplicarModoOscuro(!document.body.classList.contains('modo-oscuro'));
+  }
+
+  // Aplicar la preferencia guardada apenas carga la pagina (antes de iniciar
+  // sesion incluso), para que no haya un "parpadeo" de claro a oscuro.
+  (function iniciarModoOscuro() {
+    try {
+      if (localStorage.getItem('modoOscuro') === '1') aplicarModoOscuro(true);
+    } catch (err) { /* si el navegador bloquea localStorage, se queda en modo claro */ }
+  })();
 
   function manejarLogin(response) {
     tokenActual = response.credential;
@@ -4627,6 +4685,7 @@
     document.getElementById('reporte-' + valor).style.display = 'block';
 
     if (valor === 'categorias') renderizarReporteCategorias();
+    else if (valor === 'pastel') renderizarReportePastel();
     else if (valor === 'ingresosgastos') renderizarReporteIngresosGastos();
     else if (valor === 'patrimonio') renderizarReportePatrimonio();
     else if (valor === 'anual') renderizarReporteAnual();
@@ -4789,26 +4848,145 @@
   // ---- Vista 3: Evolucion del patrimonio neto ----
   function renderizarReportePatrimonio() {
     const cont = document.getElementById('chart-reporte-patrimonio');
-    const meses = obtenerUltimosMeses(6);
+    const meses = obtenerUltimosMeses(12);
     const valores = meses.map(m => {
       const finDeMes = new Date(m.anio, m.mes + 1, 0, 23, 59, 59);
       return patrimonioNetoEnFecha(finDeMes);
     });
-    const max = Math.max(...valores.map(v => Math.abs(v)), 1);
 
-    cont.innerHTML = '';
-    meses.forEach((m, i) => {
-      const valor = valores[i];
-      const pct = (Math.abs(valor) / max) * 100;
-      const fila = document.createElement('div');
-      fila.className = 'barra-patrimonio';
-      fila.innerHTML = `
-        <span class="etiqueta-mes">${m.etiqueta}</span>
-        <div class="pista"><div class="relleno" style="width:${pct}%; ${valor < 0 ? 'background:var(--coral);' : ''}"></div></div>
-        <span class="valor cifra" style="${valor < 0 ? 'color:var(--coral);' : ''}">RD$${valor.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
-      `;
-      cont.appendChild(fila);
+    const anchoSvg = 700, altoSvg = 220;
+    const margenIzq = 10, margenDer = 10, margenSup = 15, margenInf = 30;
+    const anchoUtil = anchoSvg - margenIzq - margenDer;
+    const altoUtil = altoSvg - margenSup - margenInf;
+
+    const max = Math.max(...valores, 0);
+    const min = Math.min(...valores, 0);
+    const rango = (max - min) || 1;
+
+    const puntos = valores.map((v, i) => {
+      const x = margenIzq + (i / (valores.length - 1)) * anchoUtil;
+      const y = margenSup + altoUtil - ((v - min) / rango) * altoUtil;
+      return { x, y, v };
     });
+
+    const y0 = margenSup + altoUtil - ((0 - min) / rango) * altoUtil; // linea del "cero"
+    const puntosLinea = puntos.map(p => `${p.x},${p.y}`).join(' ');
+    const puntosArea = `${margenIzq},${y0} ` + puntosLinea + ` ${margenIzq + anchoUtil},${y0}`;
+
+    const tendenciaSubiendo = valores[valores.length - 1] >= valores[0];
+    const colorLinea = tendenciaSubiendo ? '#2E9F6E' : '#C85A46';
+
+    const circulos = puntos.map((p, i) => `
+      <circle cx="${p.x}" cy="${p.y}" r="3.5" fill="${colorLinea}" />
+      <text x="${p.x}" y="${altoSvg - 8}" font-size="10" text-anchor="middle" fill="var(--texto-secundario)">${meses[i].etiqueta}</text>
+    `).join('');
+
+    cont.innerHTML = `
+      <svg viewBox="0 0 ${anchoSvg} ${altoSvg}" style="width:100%; height:auto; overflow:visible;">
+        <line x1="${margenIzq}" y1="${y0}" x2="${margenIzq + anchoUtil}" y2="${y0}" stroke="var(--borde)" stroke-width="1" stroke-dasharray="4 3" />
+        <polygon points="${puntosArea}" fill="${colorLinea}" opacity="0.08" />
+        <polyline points="${puntosLinea}" fill="none" stroke="${colorLinea}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+        ${circulos}
+      </svg>
+      <div style="display:flex; justify-content:space-between; margin-top:0.5rem; font-size:0.85rem;">
+        <span class="detalle">Hace 12 meses: <strong class="cifra">RD$${valores[0].toLocaleString('es-DO', {minimumFractionDigits:2})}</strong></span>
+        <span class="detalle">Ahora: <strong class="cifra" style="color:${colorLinea};">RD$${valores[valores.length-1].toLocaleString('es-DO', {minimumFractionDigits:2})}</strong></span>
+      </div>
+    `;
+  }
+
+  // ---- Vista pastel: distribucion de Gastos/Ingresos por categoria ----
+  const PALETA_PASTEL = ['#0E5C56', '#D99A3E', '#C85A46', '#2E9F6E', '#5B7FDB', '#B168C4', '#4FB3A9', '#E8934C', '#7A9E3D', '#C4507E'];
+  let tipoPastelActual = 'gasto';
+
+  function poblarSelectAnioPastel() {
+    const select = document.getElementById('pastel-campo-anio');
+    if (!select) return;
+    const valorPrevio = select.value;
+    const anios = new Set();
+    transaccionesCache.forEach(t => { if (t['Fecha']) anios.add(new Date(t['Fecha']).getFullYear()); });
+    anios.add(new Date().getFullYear());
+    const listaAnios = Array.from(anios).sort((a, b) => b - a);
+
+    select.innerHTML = '';
+    listaAnios.forEach(anio => {
+      const opt = document.createElement('option');
+      opt.value = anio;
+      opt.textContent = anio;
+      select.appendChild(opt);
+    });
+    if (valorPrevio && listaAnios.includes(parseInt(valorPrevio, 10))) {
+      select.value = valorPrevio;
+    } else {
+      select.value = new Date().getFullYear();
+      document.getElementById('pastel-campo-mes').value = new Date().getMonth() + 1;
+    }
+  }
+
+  function cambiarTipoPastel(valor) {
+    tipoPastelActual = valor;
+    document.querySelectorAll('.filtro-btn[data-pastel-tipo]').forEach(b => b.classList.toggle('activo', b.dataset.pastelTipo === valor));
+    renderizarReportePastel();
+  }
+
+  function renderizarReportePastel() {
+    const cont = document.getElementById('chart-reporte-pastel');
+    const mes = parseInt(document.getElementById('pastel-campo-mes').value, 10);
+    const anio = parseInt(document.getElementById('pastel-campo-anio').value, 10);
+    if (!anio) { cont.innerHTML = '<p class="vacio">Sin datos</p>'; return; }
+
+    const porCategoria = {};
+    transaccionesCache.forEach(t => {
+      if (t['Tipo (ingreso/gasto)'] !== tipoPastelActual) return;
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!f || f.getMonth() + 1 !== mes || f.getFullYear() !== anio) return;
+      const cat = t['Categoria'] || 'Sin categoría';
+      porCategoria[cat] = (porCategoria[cat] || 0) + (parseFloat(t['Monto']) || 0);
+    });
+
+    const entradas = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]);
+    const total = entradas.reduce((s, [, v]) => s + v, 0);
+
+    if (entradas.length === 0 || total === 0) {
+      cont.innerHTML = '<p class="vacio">Sin ' + (tipoPastelActual === 'gasto' ? 'gastos' : 'ingresos') + ' registrados en este mes</p>';
+      return;
+    }
+
+    // Arma el conic-gradient: cada categoria ocupa el % de su parte, en orden
+    let acumulado = 0;
+    const segmentos = entradas.map(([cat, monto], i) => {
+      const color = PALETA_PASTEL[i % PALETA_PASTEL.length];
+      const desde = acumulado;
+      const pct = (monto / total) * 100;
+      acumulado += pct;
+      return `${color} ${desde}% ${acumulado}%`;
+    });
+    const gradiente = `conic-gradient(${segmentos.join(', ')})`;
+
+    const leyenda = entradas.map(([cat, monto], i) => {
+      const color = PALETA_PASTEL[i % PALETA_PASTEL.length];
+      const pct = (monto / total * 100).toFixed(1);
+      return `
+        <div style="display:flex; align-items:center; gap:8px; padding:5px 0;">
+          <span style="width:12px; height:12px; border-radius:3px; background:${color}; flex-shrink:0;"></span>
+          <span style="flex:1; font-size:0.82rem;">${cat}</span>
+          <span class="cifra" style="font-size:0.8rem; color:var(--texto-secundario);">${pct}%</span>
+          <span class="cifra" style="font-size:0.8rem; width:95px; text-align:right;">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+      `;
+    }).join('');
+
+    cont.innerHTML = `
+      <div style="display:flex; justify-content:center; margin-bottom:1.25rem;">
+        <div style="width:180px; height:180px; border-radius:50%; background:${gradiente}; display:flex; align-items:center; justify-content:center; position:relative;">
+          <div style="width:100px; height:100px; border-radius:50%; background:var(--superficie); display:flex; flex-direction:column; align-items:center; justify-content:center;">
+            <span style="font-size:0.65rem; color:var(--texto-secundario);">Total</span>
+            <span class="cifra" style="font-size:0.8rem; font-weight:600;">RD$${total.toLocaleString('es-DO', {maximumFractionDigits:0})}</span>
+          </div>
+        </div>
+      </div>
+      ${leyenda}
+    `;
   }
 
   // ---- Vista 4: Resumen anual ----
@@ -4898,9 +5076,11 @@
   function renderizarReportes() {
     poblarSelectReporteCategorias();
     poblarSelectReporteAnio();
+    poblarSelectAnioPastel();
     const vistaActiva = document.querySelector('.filtro-btn[data-reporte].activo');
     const valor = vistaActiva ? vistaActiva.dataset.reporte : 'categorias';
     if (valor === 'categorias') renderizarReporteCategorias();
+    else if (valor === 'pastel') renderizarReportePastel();
     else if (valor === 'ingresosgastos') renderizarReporteIngresosGastos();
     else if (valor === 'patrimonio') renderizarReportePatrimonio();
     else if (valor === 'anual') renderizarReporteAnual();
