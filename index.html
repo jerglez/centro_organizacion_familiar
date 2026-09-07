@@ -928,6 +928,7 @@
         <option value="">Todas las cuentas</option>
       </select>
     </div>
+    <div id="resumen-filtro-movimientos" class="detalle" style="display:none; margin-bottom:0.6rem; font-size:0.85rem;"></div>
     <ul id="lista-transacciones">
       <li class="vacio">Cargando...</li>
     </ul>
@@ -1641,7 +1642,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "22.0";
+  const VERSION_APP = "22.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -3298,6 +3299,25 @@
       if (filtroCuentaMovimientos && t['Cuenta'] !== filtroCuentaMovimientos) return false;
       return true;
     });
+
+    // Resumen de totales segun el filtro de fecha activo — no se muestra con
+    // "Todos" (sumar TODA la historia no es un dato tan util como sumar
+    // "hoy", "esta semana", "este mes", etc.)
+    const resumenEl = document.getElementById('resumen-filtro-movimientos');
+    if (filtroMovimientos === 'todos') {
+      resumenEl.style.display = 'none';
+    } else {
+      let totalIngresos = 0, totalGastos = 0;
+      filtrados.forEach(t => {
+        const monto = parseFloat(t['Monto']) || 0;
+        if (t['Tipo (ingreso/gasto)'] === 'ingreso') totalIngresos += monto; else totalGastos += monto;
+      });
+      const neto = totalIngresos - totalGastos;
+      resumenEl.style.display = 'block';
+      resumenEl.innerHTML = `Ingresos: <strong class="cifra" style="color:var(--verde);">RD$${totalIngresos.toLocaleString('es-DO', {minimumFractionDigits:2})}</strong>` +
+        ` · Gastos: <strong class="cifra" style="color:var(--coral);">RD$${totalGastos.toLocaleString('es-DO', {minimumFractionDigits:2})}</strong>` +
+        ` · Neto: <strong class="cifra" style="color:${neto >= 0 ? 'var(--verde)' : 'var(--coral)'};">RD$${neto.toLocaleString('es-DO', {minimumFractionDigits:2})}</strong>`;
+    }
 
     if (filtrados.length === 0) {
       lista.innerHTML = '<li class="vacio">No hay movimientos en este período</li>';
