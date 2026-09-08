@@ -1056,6 +1056,14 @@
             <label for="cuenta-campo-tasa">Tasa de interés anual (%)</label>
             <input type="number" id="cuenta-campo-tasa" step="0.01" min="0">
           </div>
+          <div>
+            <label for="cuenta-campo-prealerta-limite">Pre-alerta al consumir (%)</label>
+            <input type="number" id="cuenta-campo-prealerta-limite" min="1" max="100" placeholder="35 (por defecto)">
+          </div>
+          <div>
+            <label for="cuenta-campo-alerta-limite">Alerta al consumir (%)</label>
+            <input type="number" id="cuenta-campo-alerta-limite" min="1" max="100" placeholder="50 (por defecto)">
+          </div>
         </div>
       </div>
 
@@ -1642,7 +1650,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "22.1";
+  const VERSION_APP = "23.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2271,13 +2279,19 @@
 
     let detalleExtra = cuenta['Tipo'] + (cuenta['Institucion'] ? ' · ' + cuenta['Institucion'] : '');
     let badgeCuenta = '';
+    let consumoLimite = null;
     if (!activa) {
       badgeCuenta = '<span class="badge-alerta prealerta">Cerrada</span>';
     } else if (esPasivo) {
       const estadoTarjeta = calcularEstadoTarjeta(cuenta);
       if (estadoTarjeta) {
         const clase = estadoTarjeta.nivel === 'pre' ? 'prealerta' : 'exceso';
-        badgeCuenta = `<span class="badge-alerta ${clase}">${estadoTarjeta.texto}</span>`;
+        badgeCuenta += `<span class="badge-alerta ${clase}">${estadoTarjeta.texto}</span>`;
+      }
+      consumoLimite = calcularConsumoLimiteTarjeta(cuenta);
+      if (consumoLimite && consumoLimite.nivel) {
+        const clase = consumoLimite.nivel === 'pre' ? 'prealerta' : 'exceso';
+        badgeCuenta += `<span class="badge-alerta ${clase}">${consumoLimite.texto} de límite</span>`;
       }
     }
     if (cuenta['Tipo'] === 'Inversion') {
@@ -2300,6 +2314,14 @@
         <div class="item-info" style="cursor:pointer;" onclick="editarCuenta('${cuenta['ID']}')" title="Clic para ver y editar los datos">
           <div class="categoria fila-titulo-badge"><span class="texto-titulo">${cuenta['Nombre']}</span>${badgeCuenta}</div>
           <div class="detalle">${detalleExtra}</div>
+          ${consumoLimite ? `
+          <div style="margin-top:6px;">
+            <div class="detalle" style="margin-bottom:3px;">Límite consumido: ${consumoLimite.porcentaje.toFixed(0)}% (RD$${consumoLimite.deuda.toLocaleString('es-DO', {maximumFractionDigits:0})} de RD$${consumoLimite.limite.toLocaleString('es-DO', {maximumFractionDigits:0})})</div>
+            <div style="background:var(--fondo); border-radius:7px; height:10px; overflow:hidden; max-width:260px;">
+              <div style="width:${Math.min(100, consumoLimite.porcentaje)}%; height:100%; border-radius:7px; background:${consumoLimite.nivel === 'alerta' ? 'var(--coral)' : consumoLimite.nivel === 'pre' ? 'var(--mango)' : 'var(--teal)'};"></div>
+            </div>
+            <div class="detalle" style="margin-top:3px;">Disponible: RD$${consumoLimite.disponible.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+          </div>` : ''}
         </div>
         <span class="item-monto cifra ${colorMonto}">${etiquetaMonto}: ${signoMonto}RD$${Math.abs(saldo).toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
       </div>
@@ -2515,6 +2537,8 @@
     document.getElementById('cuenta-campo-limite-credito').value = cuenta['Limite de credito'] || '';
     document.getElementById('cuenta-campo-balance-corte').value = cuenta['Balance al corte'] || '';
     document.getElementById('cuenta-campo-tasa').value = cuenta['Tasa de interes anual'] || '';
+    document.getElementById('cuenta-campo-prealerta-limite').value = cuenta['Porcentaje prealerta limite'] || '';
+    document.getElementById('cuenta-campo-alerta-limite').value = cuenta['Porcentaje alerta limite'] || '';
     document.getElementById('cuenta-campo-tasa-inversion').value = cuenta['Tasa de interes anual'] || '';
     actualizarCamposCuenta();
     document.getElementById('cuenta-btn-guardar').textContent = 'Guardar cambios';
@@ -2623,7 +2647,9 @@
       fechaLimitePago: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-pago').value : '',
       limiteCredito: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-limite-credito').value : '',
       balanceCorte: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-balance-corte').value : '',
-      tasaInteres: tasaInteres
+      tasaInteres: tasaInteres,
+      porcentajePrealerta: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-prealerta-limite').value : '',
+      porcentajeAlerta: tipo === 'Tarjeta de credito' ? document.getElementById('cuenta-campo-alerta-limite').value : ''
     };
 
     try {
@@ -3516,6 +3542,10 @@
       const estado = calcularEstadoTarjeta(c);
       if (estado) {
         enviarAlertaSiEsNueva('Pago de tarjeta ' + c['Nombre'], estado.texto, 'Cuentas');
+      }
+      const consumo = calcularConsumoLimiteTarjeta(c);
+      if (consumo && consumo.nivel) {
+        enviarAlertaSiEsNueva('Consumo de límite de ' + c['Nombre'], consumo.texto, 'Cuentas');
       }
     });
 
@@ -5141,6 +5171,26 @@
     const fecha = new Date(cuenta['Fecha limite de pago']);
     const r = calcularEstadoPorFecha(fecha, 5);
     return r && r.nivel ? r : null;
+  }
+
+  // Consumo del limite de credito: independiente de la fecha de pago — mide
+  // que tanto de tu limite total ya estas usando. Umbrales editables por
+  // tarjeta (35%/50% por defecto si no se configuraron).
+  function calcularConsumoLimiteTarjeta(cuenta) {
+    if (cuenta['Tipo'] !== 'Tarjeta de credito') return null;
+    const limite = parseFloat(cuenta['Limite de credito']) || 0;
+    if (limite <= 0) return null; // sin limite configurado, no se puede calcular %
+
+    const deuda = calcularSaldoCuenta(cuenta['Nombre']);
+    const porcentaje = Math.max(0, (deuda / limite) * 100);
+    const umbralPrealerta = parseFloat(cuenta['Porcentaje prealerta limite']) || 35;
+    const umbralAlerta = parseFloat(cuenta['Porcentaje alerta limite']) || 50;
+
+    let nivel = null, texto = null;
+    if (porcentaje >= umbralAlerta) { nivel = 'alerta'; texto = 'Alerta'; }
+    else if (porcentaje >= umbralPrealerta) { nivel = 'pre'; texto = 'Pre-alerta'; }
+
+    return { porcentaje, limite, deuda, disponible: Math.max(0, limite - deuda), nivel, texto };
   }
 
   // Prestamos activos (con balance pendiente): usa "Proxima fecha de pago". 5 dias de anticipacion.
