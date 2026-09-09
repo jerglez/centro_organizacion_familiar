@@ -492,12 +492,14 @@
   #lista-cuentaspagar,
   #lista-calendario,
   #lista-presupuestos-modulo,
-  #lista-cuentas { list-style: none; margin: 0; padding: 0; }
+  #lista-cuentas,
+  #lista-transferencias { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
   #lista-usuarios li,
-  #lista-compras-items li {
+  #lista-compras-items li,
+  #lista-transferencias li {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -515,7 +517,8 @@
   #lista-categorias li:last-child,
   #lista-ultimos-movimientos li:last-child,
   #lista-usuarios li:last-child,
-  #lista-compras-items li:last-child { border-bottom: none; }
+  #lista-compras-items li:last-child,
+  #lista-transferencias li:last-child { border-bottom: none; }
   .item-info { min-width: 130px; flex: 1 1 130px; margin-right: 0.5rem; }
   .item-info .categoria { font-size: 0.9rem; font-weight: 600; word-break: break-word; }
   .item-info .detalle { font-size: 0.76rem; color: var(--texto-secundario); word-break: break-word; }
@@ -1658,7 +1661,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "24.0";
+  const VERSION_APP = "24.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
