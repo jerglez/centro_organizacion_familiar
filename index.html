@@ -1091,6 +1091,7 @@
   <section class="bloque">
     <h3>Transferencias entre cuentas</h3>
     <form id="form-transferencia" onsubmit="return agregarTransferencia(event)">
+      <input type="hidden" id="transf-campo-id" value="">
       <div>
         <label for="transf-origen">Desde</label>
         <select id="transf-origen" required onchange="actualizarSaldosTransferencia()"></select>
@@ -1109,15 +1110,22 @@
           <button type="button" class="secundario" onclick="elegirMontoPagoTarjeta('otro')">Otro</button>
         </div>
       </div>
-      <div class="campo-ancho">
+      <div>
         <label for="transf-monto">Monto (RD$)</label>
         <input type="number" id="transf-monto" step="0.01" min="0" required>
+      </div>
+      <div>
+        <label for="transf-fecha">Fecha (opcional)</label>
+        <input type="date" id="transf-fecha">
       </div>
       <div class="campo-ancho">
         <label for="transf-descripcion">Descripción (opcional)</label>
         <input type="text" id="transf-descripcion" placeholder="Ej. Retiro de cajero">
       </div>
-      <button type="submit" class="guardar" id="transf-btn-guardar">Transferir</button>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem;">
+        <button type="submit" class="guardar" id="transf-btn-guardar" style="flex:1;">Transferir</button>
+        <button type="button" class="secundario" id="transf-btn-cancelar" onclick="cancelarEdicionTransferencia()" style="display:none;">Cancelar</button>
+      </div>
     </form>
 
     <h3 style="margin: 1.5rem 0 0.75rem; padding-top: 1.25rem; border-top: 1px solid var(--borde);">Historial de Transferencias</h3>
@@ -1650,7 +1658,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "23.1";
+  const VERSION_APP = "24.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2331,7 +2339,7 @@
         <div style="display:flex; align-items:center; gap:10px; margin-left:auto;">
           <button type="button" class="btn-editar-mov" onclick="editarCuenta('${cuenta['ID']}')" title="Editar">✏️</button>
           ${botonCerrarReabrir}
-          <button type="button" class="btn-editar-mov" onclick="eliminarCuenta('${cuenta['ID']}')" title="Eliminar">🗑️</button>
+          ${miRol === 'Admin' ? `<button type="button" class="btn-editar-mov" onclick="eliminarCuenta('${cuenta['ID']}')" title="Eliminar">🗑️</button>` : ''}
         </div>
       </div>
       <div id="historial-cuenta-${cuenta['ID']}" style="display:${historialAbierto ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
@@ -2744,11 +2752,14 @@
       const fecha = fechaTransf ? fechaTransf.toLocaleDateString('es-DO') : '';
       const li = document.createElement('li');
       li.innerHTML = `
-        <div class="item-info">
+        <div class="item-info" style="cursor:pointer;" onclick="editarTransferencia('${tr['ID']}')" title="Clic para editar">
           <div class="categoria">${tr['Cuenta origen']} → ${tr['Cuenta destino']}</div>
           <div class="detalle">${tr['Descripcion'] || ''} ${fecha ? '· ' + fecha : ''}</div>
         </div>
-        <div class="item-monto cifra">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="item-monto cifra">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</div>
+          <button type="button" class="btn-editar-mov" onclick="editarTransferencia('${tr['ID']}')" title="Editar">✏️</button>
+        </div>
       `;
       lista.appendChild(li);
     });
@@ -2762,6 +2773,8 @@
     }
   }
 
+  let transferenciaEditandoId = null;
+
   async function agregarTransferencia(evento) {
     evento.preventDefault();
     const boton = document.getElementById('transf-btn-guardar');
@@ -2774,32 +2787,64 @@
     }
 
     boton.disabled = true;
-    boton.textContent = 'Transfiriendo...';
+    boton.textContent = transferenciaEditandoId ? 'Guardando cambios...' : 'Transfiriendo...';
 
     const payload = {
       cuentaOrigen: origen,
       cuentaDestino: destino,
       monto: parseFloat(document.getElementById('transf-monto').value),
+      fecha: document.getElementById('transf-fecha').value,
       descripcion: document.getElementById('transf-descripcion').value
     };
 
     try {
-      const resp = await llamarAPI('addTransferencia', payload);
+      let resp;
+      if (transferenciaEditandoId) {
+        payload.id = transferenciaEditandoId;
+        resp = await llamarAPI('updateTransferencia', payload);
+      } else {
+        resp = await llamarAPI('addTransferencia', payload);
+      }
+
       if (resp.ok) {
-        mostrarMensaje('Transferencia registrada', 'ok');
-        document.getElementById('form-transferencia').reset();
+        mostrarMensaje(transferenciaEditandoId ? 'Transferencia actualizada' : 'Transferencia registrada', 'ok');
+        cancelarEdicionTransferencia();
         await cargarTransferencias();
         actualizarUltimaSincronizacion();
       } else {
-        mostrarMensaje('Error al transferir: ' + resp.error, 'error');
+        mostrarMensaje('Error al guardar: ' + resp.error, 'error');
       }
     } catch (err) {
-      mostrarMensaje('No se pudo transferir: ' + err.message, 'error');
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
     } finally {
       boton.disabled = false;
-      boton.textContent = 'Transferir';
+      boton.textContent = transferenciaEditandoId ? 'Guardar cambios' : 'Transferir';
     }
     return false;
+  }
+
+  function editarTransferencia(id) {
+    const tr = transferenciasCache.find(x => String(x['ID']) === String(id));
+    if (!tr) return;
+    transferenciaEditandoId = id;
+    document.getElementById('transf-campo-id').value = id;
+    document.getElementById('transf-origen').value = tr['Cuenta origen'];
+    document.getElementById('transf-destino').value = tr['Cuenta destino'];
+    document.getElementById('transf-monto').value = tr['Monto'] || '';
+    const fecha = tr['Fecha'] ? new Date(tr['Fecha']) : null;
+    document.getElementById('transf-fecha').value = fecha ? fecha.toISOString().split('T')[0] : '';
+    document.getElementById('transf-descripcion').value = tr['Descripcion'] || '';
+    document.getElementById('transf-btn-guardar').textContent = 'Guardar cambios';
+    document.getElementById('transf-btn-cancelar').style.display = 'inline-block';
+    document.getElementById('form-transferencia').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function cancelarEdicionTransferencia() {
+    transferenciaEditandoId = null;
+    document.getElementById('form-transferencia').reset();
+    document.getElementById('transf-campo-id').value = '';
+    document.getElementById('transf-btn-guardar').textContent = 'Transferir';
+    document.getElementById('transf-btn-cancelar').style.display = 'none';
   }
 
   // ---------- Prestamos ----------
@@ -2906,7 +2951,7 @@
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="item-monto cifra ${pagado ? 'ingreso' : 'gasto'}">RD$${balance.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
             <button type="button" class="btn-editar-mov" onclick="editarPrestamo('${p['ID']}')" title="Editar">✏️</button>
-            <button type="button" class="btn-editar-mov" onclick="eliminarPrestamo('${p['ID']}')" title="Eliminar">🗑️</button>
+            ${miRol === 'Admin' ? `<button type="button" class="btn-editar-mov" onclick="eliminarPrestamo('${p['ID']}')" title="Eliminar">🗑️</button>` : ''}
           </div>
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
@@ -2918,7 +2963,7 @@
       `;
       if (historialAbiertoPrestamo) {
         const contHistorial = li.querySelector('#historial-' + p['ID']);
-        renderizarHistorialPrestamo(p['ID']);
+        renderizarHistorialPrestamo(contHistorial, p['ID']);
       }
       if (indice < filtrados.length - 1) {
         li.style.borderBottom = '1px solid var(--borde)';
@@ -2944,8 +2989,7 @@
     renderizarPrestamos();
   }
 
-  function renderizarHistorialPrestamo(prestamoId) {
-    const cont = document.getElementById('historial-' + prestamoId);
+  function renderizarHistorialPrestamo(cont, prestamoId) {
     if (!cont) return;
     const registros = historialPagosCache
       .filter(h => String(h['Prestamo ID']) === String(prestamoId))
@@ -4418,7 +4462,7 @@
           <div class="categoria fila-titulo-badge"><span class="texto-titulo">${meta['Nombre']}</span>${cumplida ? '<span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Cumplida ✓</span>' : ''}</div>
           <div style="display:flex; align-items:center; gap:10px;">
             <span class="cifra" style="font-weight:600;">${porcentaje.toFixed(0)}%</span>
-            <button type="button" class="btn-editar-mov" onclick="eliminarMeta('${meta['ID']}')" title="Eliminar">🗑️</button>
+            ${miRol === 'Admin' ? `<button type="button" class="btn-editar-mov" onclick="eliminarMeta('${meta['ID']}')" title="Eliminar">🗑️</button>` : ''}
           </div>
         </div>
         <div class="detalle" style="margin-bottom:6px;">
