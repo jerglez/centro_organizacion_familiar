@@ -1650,7 +1650,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "23.0";
+  const VERSION_APP = "23.1";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -2305,7 +2305,7 @@
       ? `<button type="button" class="btn-editar-mov" onclick="toggleActivoCuenta('${cuenta['ID']}', false)" title="Cerrar cuenta">🔒</button>`
       : `<button type="button" class="btn-editar-mov" onclick="toggleActivoCuenta('${cuenta['ID']}', true)" title="Reabrir cuenta">🔓</button>`;
 
-    const historialAbierto = cuentasHistorialAbierto.has(String(cuenta['ID']));
+    const historialAbierto = cuentaHistorialAbiertoId === String(cuenta['ID']);
 
     const li = document.createElement('li');
     li.style.display = 'block';
@@ -2349,18 +2349,14 @@
   // cada una — se guarda aqui (no en el DOM) para que sobreviva a los
   // refrescos automaticos cada 10 segundos, y solo se cierre cuando el
   // usuario le d cclic de nuevo.
-  let cuentasHistorialAbierto = new Set();
+  let cuentaHistorialAbiertoId = null;
   let cuentasHistorialCantidad = {};
   const HISTORIAL_CUENTA_POR_PAGINA = 10;
 
   function toggleHistorialCuenta(id) {
     id = String(id);
-    if (cuentasHistorialAbierto.has(id)) {
-      cuentasHistorialAbierto.delete(id);
-    } else {
-      cuentasHistorialAbierto.add(id);
-      if (!cuentasHistorialCantidad[id]) cuentasHistorialCantidad[id] = HISTORIAL_CUENTA_POR_PAGINA;
-    }
+    cuentaHistorialAbiertoId = (cuentaHistorialAbiertoId === id) ? null : id;
+    if (cuentaHistorialAbiertoId && !cuentasHistorialCantidad[id]) cuentasHistorialCantidad[id] = HISTORIAL_CUENTA_POR_PAGINA;
     renderizarCuentas();
   }
 
@@ -2900,6 +2896,7 @@
           etiquetaPagado += ` <span class="badge-alerta ${clase}">${estadoPrestamo.texto}</span>`;
         }
       }
+      const historialAbiertoPrestamo = prestamoHistorialAbiertoId === String(p['ID']);
       li.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div class="item-info" style="cursor:pointer;" onclick="${pagado ? `toggleHistorialPrestamo('${p['ID']}')` : `prepararPagoPrestamo('${p['ID']}')`}" title="${pagado ? 'Clic para ver el historial' : 'Clic para registrar un pago'}">
@@ -2915,10 +2912,14 @@
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
           ${botonPago}
           <button type="button" class="secundario" onclick="ajustarBalancePrestamo('${p['ID']}')">Ajustar balance</button>
-          <button type="button" class="secundario" onclick="toggleHistorialPrestamo('${p['ID']}')">Ver historial</button>
+          <button type="button" class="secundario" onclick="toggleHistorialPrestamo('${p['ID']}')">${historialAbiertoPrestamo ? 'Ocultar historial' : 'Ver historial'}</button>
         </div>
-        <div id="historial-${p['ID']}" style="display:none; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
+        <div id="historial-${p['ID']}" style="display:${historialAbiertoPrestamo ? 'block' : 'none'}; margin-top:0.6rem; padding-top:0.6rem; border-top:1px solid var(--borde);"></div>
       `;
+      if (historialAbiertoPrestamo) {
+        const contHistorial = li.querySelector('#historial-' + p['ID']);
+        renderizarHistorialPrestamo(p['ID']);
+      }
       if (indice < filtrados.length - 1) {
         li.style.borderBottom = '1px solid var(--borde)';
         li.style.paddingBottom = '1rem';
@@ -2933,12 +2934,14 @@
     if (resp.ok) historialPagosCache = resp.datos || [];
   }
 
+  // Solo un historial de prestamo abierto a la vez, y persiste entre los
+  // refrescos automaticos (cada 10s) — igual que Cuentas y Metas.
+  let prestamoHistorialAbiertoId = null;
+
   function toggleHistorialPrestamo(prestamoId) {
-    const cont = document.getElementById('historial-' + prestamoId);
-    if (!cont) return;
-    const abrir = cont.style.display !== 'block';
-    cont.style.display = abrir ? 'block' : 'none';
-    if (abrir) renderizarHistorialPrestamo(prestamoId);
+    prestamoId = String(prestamoId);
+    prestamoHistorialAbiertoId = (prestamoHistorialAbiertoId === prestamoId) ? null : prestamoId;
+    renderizarPrestamos();
   }
 
   function renderizarHistorialPrestamo(prestamoId) {
@@ -4361,12 +4364,11 @@
     return { actual, objetivo, porcentaje: Math.max(0, Math.min(100, porcentaje)) };
   }
 
-  let metasHistorialAbierto = new Set();
+  let metaHistorialAbiertoId = null;
 
   function toggleHistorialMeta(id) {
     id = String(id);
-    if (metasHistorialAbierto.has(id)) metasHistorialAbierto.delete(id);
-    else metasHistorialAbierto.add(id);
+    metaHistorialAbiertoId = (metaHistorialAbiertoId === id) ? null : id;
     renderizarMetas();
   }
 
@@ -4397,7 +4399,7 @@
       const fecha = meta['Fecha limite'] ? new Date(meta['Fecha limite']).toLocaleDateString('es-DO') : 'Sin fecha límite';
       const tieneCuenta = !!meta['Cuenta asociada'];
       const esUltima = indice === metasCache.length - 1;
-      const historialAbierto = metasHistorialAbierto.has(String(meta['ID']));
+      const historialAbierto = metaHistorialAbiertoId === String(meta['ID']);
 
       const li = document.createElement('li');
       li.style.display = 'block';
