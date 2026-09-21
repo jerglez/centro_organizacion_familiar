@@ -1661,7 +1661,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "24.1";
+  const VERSION_APP = "24.2";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1808,14 +1808,20 @@
     await cargarCalendario();
   }
 
+  // Estas 7 no dependen entre si (todas usan como maximo datos de la fase
+  // esencial, ya cargada antes de llegar aqui) — se disparan en paralelo con
+  // Promise.all en vez de una por una, para que el tiempo de esta fase sea el
+  // de la MAS LENTA de las 7, no la suma de las 7.
   async function cargarDatosSecundarios() {
-    await cargarPrestamos();
-    await cargarHistorialPagos();
-    await cargarListaCompras();
-    await cargarUsuarios();
-    await cargarNotificaciones();
-    await cargarMetas();
-    await cargarInventario();
+    await Promise.all([
+      cargarPrestamos(),
+      cargarHistorialPagos(),
+      cargarListaCompras(),
+      cargarUsuarios(),
+      cargarNotificaciones(),
+      cargarMetas(),
+      cargarInventario()
+    ]);
   }
 
   // Solo se usa para la carga inicial (justo despues de mostrar el Dashboard):
