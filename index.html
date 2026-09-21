@@ -1661,7 +1661,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "24.2";
+  const VERSION_APP = "24.3";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -4911,14 +4911,57 @@
       const fila = document.createElement('div');
       fila.className = 'barra-mes';
       fila.innerHTML = `
-        <div class="fila-doble">
+        <div class="fila-doble" style="cursor:pointer;" title="Clic para ver los movimientos de este mes">
           <span class="nombre">${m.etiqueta}</span>
           <div class="pista"><div class="relleno" style="width:${pct}%; background:var(--coral);"></div></div>
           <span class="valor cifra">RD$${valores[i].toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
+        <div class="detalle-mes-categoria" style="display:none; margin-top:6px; padding:6px 0 2px; border-top:1px solid var(--borde);"></div>
       `;
+
+      // Se usa addEventListener (no onclick con el nombre de categoria
+      // incrustado) para no tener problemas si esta tuviera un apostrofe.
+      const filaDoble = fila.querySelector('.fila-doble');
+      const detalleDiv = fila.querySelector('.detalle-mes-categoria');
+      filaDoble.addEventListener('click', () => {
+        const abrir = detalleDiv.style.display !== 'block';
+        if (abrir) {
+          renderizarDesgloseCategoriaMes(detalleDiv, categoria, m.mes, m.anio);
+          detalleDiv.style.display = 'block';
+        } else {
+          detalleDiv.style.display = 'none';
+        }
+      });
+
       cont.appendChild(fila);
     });
+  }
+
+  // Lista, dentro de un mes especifico de la grafica de Reportes, todas las
+  // transacciones de gasto de una categoria — igual que el desglose del
+  // Dashboard, pero para cualquiera de los 6 meses mostrados, no solo el actual.
+  function renderizarDesgloseCategoriaMes(cont, categoria, mes, anio) {
+    const items = transaccionesCache.filter(t => {
+      if (t['Tipo (ingreso/gasto)'] !== 'gasto') return false;
+      if ((t['Categoria'] || 'Sin categoría') !== categoria) return false;
+      const f = t['Fecha'] ? new Date(t['Fecha']) : null;
+      return f && f.getMonth() === mes && f.getFullYear() === anio;
+    }).sort((a, b) => new Date(b['Fecha']) - new Date(a['Fecha']));
+
+    if (items.length === 0) {
+      cont.innerHTML = '<p class="vacio">Sin movimientos este mes</p>';
+      return;
+    }
+
+    cont.innerHTML = items.map(t => {
+      const fecha = t['Fecha'] ? new Date(t['Fecha']).toLocaleDateString('es-DO') : '';
+      const monto = parseFloat(t['Monto']) || 0;
+      const detalleTexto = t['Descripcion'] || t['Comercio'] || '(sin descripción)';
+      return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
+        <span>${detalleTexto} · ${fecha}</span>
+        <span class="cifra">-RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      </div>`;
+    }).join('');
   }
 
   // ---- Vista 2: Ingresos vs Gastos a lo largo del tiempo ----
