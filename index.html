@@ -1661,7 +1661,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "24.3";
+  const VERSION_APP = "25.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -4893,6 +4893,24 @@
     }
   }
 
+  // Un solo mes desplegado a la vez en "Gastos por categoria", y persiste
+  // entre refrescos automaticos (igual que Cuentas/Prestamos/Metas) — se
+  // cierra solo si le das clic de nuevo, si abres otro mes, o si cambias
+  // de categoria en el selector.
+  let categoriaConDesgloseAbierto = null;
+  let indiceMesDesgloseAbierto = null;
+
+  function toggleDesgloseMesCategoria(categoria, indice) {
+    if (categoriaConDesgloseAbierto === categoria && indiceMesDesgloseAbierto === indice) {
+      categoriaConDesgloseAbierto = null;
+      indiceMesDesgloseAbierto = null;
+    } else {
+      categoriaConDesgloseAbierto = categoria;
+      indiceMesDesgloseAbierto = indice;
+    }
+    renderizarReporteCategorias();
+  }
+
   function renderizarReporteCategorias() {
     const cont = document.getElementById('chart-reporte-categorias');
     const categoria = document.getElementById('reporte-campo-categoria').value;
@@ -4908,6 +4926,7 @@
     cont.innerHTML = '';
     meses.forEach((m, i) => {
       const pct = (valores[i] / max) * 100;
+      const abierto = categoriaConDesgloseAbierto === categoria && indiceMesDesgloseAbierto === i;
       const fila = document.createElement('div');
       fila.className = 'barra-mes';
       fila.innerHTML = `
@@ -4916,33 +4935,30 @@
           <div class="pista"><div class="relleno" style="width:${pct}%; background:var(--coral);"></div></div>
           <span class="valor cifra">RD$${valores[i].toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
-        <div class="detalle-mes-categoria" style="display:none; margin-top:6px; padding:6px 0 2px; border-top:1px solid var(--borde);"></div>
+        <div class="detalle-mes-categoria" style="display:${abierto ? 'block' : 'none'}; margin-top:6px; padding:6px 0 2px; border-top:1px solid var(--borde);"></div>
       `;
 
-      // Se usa addEventListener (no onclick con el nombre de categoria
-      // incrustado) para no tener problemas si esta tuviera un apostrofe.
+      // addEventListener (no onclick con el nombre de categoria incrustado)
+      // para no tener problemas si esta tuviera un apostrofe.
       const filaDoble = fila.querySelector('.fila-doble');
-      const detalleDiv = fila.querySelector('.detalle-mes-categoria');
-      filaDoble.addEventListener('click', () => {
-        const abrir = detalleDiv.style.display !== 'block';
-        if (abrir) {
-          renderizarDesgloseCategoriaMes(detalleDiv, categoria, m.mes, m.anio);
-          detalleDiv.style.display = 'block';
-        } else {
-          detalleDiv.style.display = 'none';
-        }
-      });
+      filaDoble.addEventListener('click', () => toggleDesgloseMesCategoria(categoria, i));
+
+      if (abierto) {
+        const detalleDiv = fila.querySelector('.detalle-mes-categoria');
+        renderizarDesgloseCategoriaMes(detalleDiv, categoria, m.mes, m.anio, 'gasto');
+      }
 
       cont.appendChild(fila);
     });
   }
 
-  // Lista, dentro de un mes especifico de la grafica de Reportes, todas las
-  // transacciones de gasto de una categoria — igual que el desglose del
-  // Dashboard, pero para cualquiera de los 6 meses mostrados, no solo el actual.
-  function renderizarDesgloseCategoriaMes(cont, categoria, mes, anio) {
+  // Lista, dentro de un mes/tipo especifico, todas las transacciones de una
+  // categoria — con cuenta y comercio, ademas de descripcion y fecha. La usan
+  // tanto "Gastos por categoria" (siempre tipo 'gasto') como "Distribucion"
+  // (pastel), que puede ser 'gasto' o 'ingreso' segun el toggle activo ahi.
+  function renderizarDesgloseCategoriaMes(cont, categoria, mes, anio, tipo) {
     const items = transaccionesCache.filter(t => {
-      if (t['Tipo (ingreso/gasto)'] !== 'gasto') return false;
+      if (t['Tipo (ingreso/gasto)'] !== tipo) return false;
       if ((t['Categoria'] || 'Sin categoría') !== categoria) return false;
       const f = t['Fecha'] ? new Date(t['Fecha']) : null;
       return f && f.getMonth() === mes && f.getFullYear() === anio;
@@ -4953,13 +4969,21 @@
       return;
     }
 
+    const signo = tipo === 'ingreso' ? '+' : '-';
+    const color = tipo === 'ingreso' ? 'var(--verde)' : 'var(--coral)';
+
     cont.innerHTML = items.map(t => {
       const fecha = t['Fecha'] ? new Date(t['Fecha']).toLocaleDateString('es-DO') : '';
       const monto = parseFloat(t['Monto']) || 0;
-      const detalleTexto = t['Descripcion'] || t['Comercio'] || '(sin descripción)';
-      return `<div style="display:flex; justify-content:space-between; font-size:0.8rem; padding:4px 0;">
-        <span>${detalleTexto} · ${fecha}</span>
-        <span class="cifra">-RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+      const detalleTexto = t['Descripcion'] || '(sin descripción)';
+      const comercio = t['Comercio'] ? ' · ' + t['Comercio'] : '';
+      const cuenta = t['Cuenta'] || 'Sin especificar';
+      return `<div style="padding:5px 0; font-size:0.8rem;">
+        <div style="display:flex; justify-content:space-between;">
+          <span>${detalleTexto}${comercio}</span>
+          <span class="cifra" style="color:${color};">${signo}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        <div class="detalle" style="margin-top:1px;">Cuenta: ${cuenta} · ${fecha}</div>
       </div>`;
     }).join('');
   }
@@ -5046,6 +5070,7 @@
   // ---- Vista pastel: distribucion de Gastos/Ingresos por categoria ----
   const PALETA_PASTEL = ['#0E5C56', '#D99A3E', '#C85A46', '#2E9F6E', '#5B7FDB', '#B168C4', '#4FB3A9', '#E8934C', '#7A9E3D', '#C4507E'];
   let tipoPastelActual = 'gasto';
+  let categoriaAbiertaPastel = null;
 
   function poblarSelectAnioPastel() {
     const select = document.getElementById('pastel-campo-anio');
@@ -5073,6 +5098,7 @@
 
   function cambiarTipoPastel(valor) {
     tipoPastelActual = valor;
+    categoriaAbiertaPastel = null; // otro tipo (gasto/ingreso) tiene categorias distintas
     document.querySelectorAll('.filtro-btn[data-pastel-tipo]').forEach(b => b.classList.toggle('activo', b.dataset.pastelTipo === valor));
     renderizarReportePastel();
   }
@@ -5115,12 +5141,13 @@
       const color = PALETA_PASTEL[i % PALETA_PASTEL.length];
       const pct = (monto / total * 100).toFixed(1);
       return `
-        <div style="display:flex; align-items:center; gap:8px; padding:5px 0;">
+        <div class="leyenda-pastel-item" data-indice="${i}" style="display:flex; align-items:center; gap:8px; padding:5px 0; cursor:pointer;" title="Clic para ver los movimientos">
           <span style="width:12px; height:12px; border-radius:3px; background:${color}; flex-shrink:0;"></span>
           <span style="flex:1; font-size:0.82rem;">${cat}</span>
           <span class="cifra" style="font-size:0.8rem; color:var(--texto-secundario);">${pct}%</span>
           <span class="cifra" style="font-size:0.8rem; width:95px; text-align:right;">RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
         </div>
+        <div class="detalle-pastel-categoria" data-indice="${i}" style="display:none; margin:0 0 6px; padding:4px 0 2px 20px; border-bottom:1px solid var(--borde);"></div>
       `;
     }).join('');
 
@@ -5135,6 +5162,24 @@
       </div>
       ${leyenda}
     `;
+
+    // Un solo desglose abierto a la vez en el pastel, y persiste entre
+    // refrescos automaticos — igual que el resto de la app.
+    cont.querySelectorAll('.leyenda-pastel-item').forEach(fila => {
+      const indice = parseInt(fila.dataset.indice, 10);
+      const [cat] = entradas[indice];
+      const detalleDiv = cont.querySelector('.detalle-pastel-categoria[data-indice="' + indice + '"]');
+
+      if (categoriaAbiertaPastel === cat) {
+        detalleDiv.style.display = 'block';
+        renderizarDesgloseCategoriaMes(detalleDiv, cat, mes - 1, anio, tipoPastelActual);
+      }
+
+      fila.addEventListener('click', () => {
+        categoriaAbiertaPastel = (categoriaAbiertaPastel === cat) ? null : cat;
+        renderizarReportePastel();
+      });
+    });
   }
 
   // ---- Vista 4: Resumen anual ----
