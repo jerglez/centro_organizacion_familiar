@@ -198,6 +198,7 @@
   }
   .menu-item:hover { background: var(--fondo); }
   .menu-item.activo { background: var(--teal-claro); color: var(--teal-oscuro); font-weight: 600; }
+  .badge-menu { margin-left: auto; background: var(--coral); color: #fff; font-size: 0.66rem; font-weight: 700; border-radius: 999px; min-width: 18px; height: 18px; padding: 0 5px; align-items: center; justify-content: center; }
   .menu-item.proximamente { color: var(--texto-secundario); cursor: default; }
   .menu-item.proximamente:hover { background: none; }
   .menu-item.proximamente em { font-size: 0.72rem; font-style: normal; opacity: 0.75; }
@@ -391,7 +392,8 @@
   form#form-inventario,
   form#form-cuentapagar,
   form#form-evento,
-  form#form-presupuesto { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  form#form-presupuesto,
+  form#form-pendiente { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
   form#form-transaccion .campo-ancho,
   form#form-categoria .campo-ancho,
   form#form-cuenta .campo-ancho,
@@ -403,7 +405,8 @@
   form#form-inventario .campo-ancho,
   form#form-cuentapagar .campo-ancho,
   form#form-evento .campo-ancho,
-  form#form-presupuesto .campo-ancho { grid-column: 1 / -1; }
+  form#form-presupuesto .campo-ancho,
+  form#form-pendiente .campo-ancho { grid-column: 1 / -1; }
   form#form-transaccion label,
   form#form-categoria label,
   form#form-cuenta label,
@@ -415,7 +418,8 @@
   form#form-inventario label,
   form#form-cuentapagar label,
   form#form-evento label,
-  form#form-presupuesto label {
+  form#form-presupuesto label,
+  form#form-pendiente label {
     display: block;
     font-size: 0.78rem;
     color: var(--texto-secundario);
@@ -444,7 +448,9 @@
   form#form-evento input,
   form#form-evento select,
   form#form-presupuesto input,
-  form#form-presupuesto select {
+  form#form-presupuesto select,
+  form#form-pendiente input,
+  form#form-pendiente select {
     width: 100%;
     padding: 0.55rem 0.6rem;
     border-radius: 8px;
@@ -493,7 +499,8 @@
   #lista-calendario,
   #lista-presupuestos-modulo,
   #lista-cuentas,
-  #lista-transferencias { list-style: none; margin: 0; padding: 0; }
+  #lista-transferencias,
+  #lista-pendientes { list-style: none; margin: 0; padding: 0; }
   ul#lista-transacciones li,
   #lista-categorias li,
   #lista-ultimos-movimientos li,
@@ -684,7 +691,8 @@
     form#form-inventario,
     form#form-cuentapagar,
     form#form-evento,
-    form#form-presupuesto { grid-template-columns: 1fr; }
+    form#form-presupuesto,
+    form#form-pendiente { grid-template-columns: 1fr; }
 
     .tipo-toggle { flex-wrap: nowrap; }
 
@@ -759,6 +767,10 @@
     <div class="menu-item" data-panel="finanzas" onclick="mostrarSeccion('finanzas')">
       <span class="punto punto-teal"></span>Finanzas
     </div>
+    <div class="menu-item" data-panel="pendientes" onclick="mostrarSeccion('pendientes')">
+      <span class="punto punto-teal"></span>Pendientes
+      <span class="badge-menu" id="badge-menu-pendientes" style="display:none;">0</span>
+    </div>
     <div class="menu-item" data-panel="categorias" onclick="mostrarSeccion('categorias')">
       <span class="punto punto-teal"></span>Categorías
     </div>
@@ -805,6 +817,10 @@
 
   <div class="panel activo" id="panel-dashboard">
   <button type="button" class="guardar" style="width:100%; margin-bottom:1rem; background:var(--coral);" onclick="irARegistrarGasto()">+ Registrar gasto rápido</button>
+  <div id="banner-pendientes" onclick="mostrarSeccion('pendientes')" style="display:none; cursor:pointer; background:var(--teal-claro); color:var(--teal-oscuro); border-radius:8px; padding:0.7rem 0.9rem; margin-bottom:1rem; font-size:0.85rem; justify-content:space-between; align-items:center; gap:8px;">
+    <span id="texto-banner-pendientes"></span>
+    <strong style="flex-shrink:0;">Revisar →</strong>
+  </div>
   <div class="resumen">
     <div class="tarjeta saldo">
       <span class="label">Saldo total</span>
@@ -1220,6 +1236,80 @@
         <button type="button" class="guardar" id="prestamo-btn-aplicar-pago" onclick="aplicarPagoPrestamo()" style="flex:1; display:none; background:var(--verde);">Aplicar pago</button>
         <button type="button" class="secundario" id="prestamo-btn-cancelar"
           onclick="cancelarEdicionPrestamo(); document.getElementById('prestamo-form-contenedor').style.display='none';">Cancelar</button>
+      </div>
+    </form>
+    </div>
+  </section>
+  </div>
+
+  <div class="panel" id="panel-pendientes">
+  <section class="bloque">
+    <h3>Pendientes por aprobar</h3>
+    <p class="vacio" style="text-align:left; margin:0 0 0.9rem;">Escribe o dicta un movimiento y revísalo antes de guardarlo. Nada de aquí afecta tus saldos hasta que lo apruebes.</p>
+
+    <div id="entrada-rapida-pendiente" style="margin-bottom:1rem;">
+      <div style="display:flex; gap:0.5rem;">
+        <input type="text" id="pendiente-texto-rapido" placeholder="Ej. gasté 850 en Supermercado Nacional con Banreservas ayer"
+          style="flex:1; min-width:0; padding:0.55rem 0.6rem; border-radius:8px; border:1px solid var(--borde); background:var(--superficie); color:var(--texto); font-size:0.9rem; font-family:inherit;"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); interpretarEntradaRapida();}">
+        <button type="button" class="secundario" id="btn-dictar" onclick="iniciarDictado()" title="Dictar" style="flex-shrink:0;">🎤</button>
+        <button type="button" class="guardar" onclick="interpretarEntradaRapida()" style="width:auto; flex-shrink:0; padding:0.55rem 0.9rem;">Interpretar</button>
+      </div>
+      <p class="texto-sync" style="margin:4px 0 0; white-space:normal;">Tip: en iPhone usa el micrófono del teclado para dictar dentro del cuadro. Puedes decir cuenta, categoría, comercio y "ayer" o "hoy".</p>
+    </div>
+
+    <div class="filtro-movimientos">
+      <button type="button" class="filtro-btn activo" data-filtro-pend="porAprobar" onclick="cambiarFiltroPendientes('porAprobar')">Por aprobar</button>
+      <button type="button" class="filtro-btn" data-filtro-pend="historial" onclick="cambiarFiltroPendientes('historial')">Historial</button>
+    </div>
+
+    <ul id="lista-pendientes" style="margin-bottom:1rem;">
+      <li class="vacio">Cargando...</li>
+    </ul>
+
+    <button type="button" class="secundario" style="width:100%; margin-bottom:1rem;" onclick="abrirFormularioPendiente({}, null)">
+      + Nuevo pendiente manual
+    </button>
+
+    <div id="pendiente-form-contenedor" style="display:none;">
+    <form id="form-pendiente" onsubmit="return guardarPendienteForm(event, false)">
+      <input type="hidden" id="pendiente-campo-fuente" value="manual">
+      <input type="hidden" id="pendiente-campo-texto-original" value="">
+      <div>
+        <label for="pendiente-campo-tipo">Tipo</label>
+        <select id="pendiente-campo-tipo" onchange="actualizarSelectsPendiente()">
+          <option value="gasto">Gasto</option>
+          <option value="ingreso">Ingreso</option>
+        </select>
+      </div>
+      <div>
+        <label for="pendiente-campo-monto">Monto (RD$)</label>
+        <input type="number" id="pendiente-campo-monto" step="0.01" min="0.01" required>
+      </div>
+      <div>
+        <label for="pendiente-campo-categoria">Categoría</label>
+        <select id="pendiente-campo-categoria"></select>
+      </div>
+      <div>
+        <label for="pendiente-campo-cuenta">Cuenta</label>
+        <select id="pendiente-campo-cuenta"></select>
+      </div>
+      <div>
+        <label for="pendiente-campo-fecha">Fecha</label>
+        <input type="date" id="pendiente-campo-fecha">
+      </div>
+      <div>
+        <label for="pendiente-campo-comercio">Comercio (opcional)</label>
+        <input type="text" id="pendiente-campo-comercio">
+      </div>
+      <div class="campo-ancho">
+        <label for="pendiente-campo-descripcion">Descripción (opcional)</label>
+        <input type="text" id="pendiente-campo-descripcion">
+      </div>
+      <div class="campo-ancho" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+        <button type="submit" class="guardar" id="pendiente-btn-guardar" style="flex:1;">Guardar como pendiente</button>
+        <button type="button" class="guardar" id="pendiente-btn-aprobar" onclick="guardarPendienteForm(null, true)" style="flex:1; background:var(--verde);">Guardar y aprobar</button>
+        <button type="button" class="secundario" onclick="cancelarEdicionPendiente()">Cancelar</button>
       </div>
     </form>
     </div>
@@ -1661,7 +1751,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "25.0";
+  const VERSION_APP = "26.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1820,7 +1910,8 @@
       cargarUsuarios(),
       cargarNotificaciones(),
       cargarMetas(),
-      cargarInventario()
+      cargarInventario(),
+      cargarPendientes()
     ]);
   }
 
@@ -1860,7 +1951,9 @@
       elementoActivo.closest('#form-usuario') ||
       elementoActivo.closest('#form-meta') ||
       elementoActivo.closest('#form-inventario') ||
-      elementoActivo.closest('#form-cuentapagar')
+      elementoActivo.closest('#form-cuentapagar') ||
+      elementoActivo.closest('#form-pendiente') ||
+      elementoActivo.closest('#entrada-rapida-pendiente')
     ) && (elementoActivo.tagName === 'INPUT' || elementoActivo.tagName === 'SELECT');
 
     if (escribiendoEnFormulario) return true;
@@ -6054,6 +6147,522 @@
       boton.disabled = false;
     }
     return false;
+  }
+
+  // ---------- Pendientes por aprobar ----------
+  // Cola de movimientos que aun no afectan saldos: se interpretan desde texto o
+  // dictado (y en fases futuras desde correos/Wallet), y una persona los
+  // revisa y aprueba. Solo al aprobar se crea la transaccion real.
+  let pendientesCache = [];
+  let filtroPendientes = 'porAprobar';
+  let pendienteEditandoId = null;
+
+  // Los textos de pendientes pueden venir de fuentes externas (correo bancario
+  // mas adelante), asi que se escapan antes de mostrarse como HTML.
+  function escaparHtml(valor) {
+    return String(valor == null ? '' : valor)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function fechaLocalISO(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function normalizarTexto(s) {
+    return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  async function cargarPendientes() {
+    const resp = await llamarAPI('getPendientes');
+    if (resp.ok) {
+      pendientesCache = resp.datos || [];
+      renderizarPendientes();
+    }
+  }
+
+  // Un pendiente parece duplicado si ya hay una transaccion del mismo tipo y
+  // monto, con fecha a menos de ~1.5 dias, y (si ambos tienen cuenta) la misma.
+  function esDuplicadoProbable(p) {
+    const monto = parseFloat(p['Monto']) || 0;
+    if (monto <= 0 || !p['Fecha']) return false;
+    const textoFecha = String(p['Fecha']);
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(textoFecha) ? new Date(textoFecha + 'T12:00:00') : new Date(textoFecha);
+    if (isNaN(fecha)) return false;
+    return transaccionesCache.some(t => {
+      if (t['Tipo (ingreso/gasto)'] !== p['Tipo']) return false;
+      if (Math.abs((parseFloat(t['Monto']) || 0) - monto) > 0.009) return false;
+      const ft = t['Fecha'] ? new Date(t['Fecha']) : null;
+      if (!ft || isNaN(ft)) return false;
+      if (Math.abs(ft - fecha) > 36 * 3600 * 1000) return false;
+      if (p['Cuenta'] && t['Cuenta'] && p['Cuenta'] !== t['Cuenta']) return false;
+      return true;
+    });
+  }
+
+  function actualizarIndicadoresPendientes(cantidad) {
+    const badge = document.getElementById('badge-menu-pendientes');
+    const banner = document.getElementById('banner-pendientes');
+    if (cantidad > 0) {
+      badge.textContent = cantidad > 9 ? '9+' : cantidad;
+      badge.style.display = 'inline-flex';
+      document.getElementById('texto-banner-pendientes').textContent =
+        'Tienes ' + cantidad + ' movimiento' + (cantidad > 1 ? 's' : '') + ' pendiente' + (cantidad > 1 ? 's' : '') + ' por aprobar';
+      banner.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+      banner.style.display = 'none';
+    }
+  }
+
+  function cambiarFiltroPendientes(valor) {
+    filtroPendientes = valor;
+    document.querySelectorAll('.filtro-btn[data-filtro-pend]').forEach(b => b.classList.toggle('activo', b.dataset.filtroPend === valor));
+    renderizarPendientes();
+  }
+
+  function renderizarPendientes() {
+    actualizarSelectsPendiente();
+    const lista = document.getElementById('lista-pendientes');
+    lista.innerHTML = '';
+
+    const porAprobar = pendientesCache.filter(p => p['Estado'] === 'Pendiente');
+    actualizarIndicadoresPendientes(porAprobar.length);
+
+    const masRecientesPrimero = (a, b) => (parseInt(b['ID'], 10) || 0) - (parseInt(a['ID'], 10) || 0);
+    const items = filtroPendientes === 'porAprobar'
+      ? porAprobar.sort(masRecientesPrimero)
+      : pendientesCache.filter(p => p['Estado'] !== 'Pendiente').sort(masRecientesPrimero).slice(0, 30);
+
+    if (items.length === 0) {
+      lista.innerHTML = '<li class="vacio">' + (filtroPendientes === 'porAprobar'
+        ? 'No tienes movimientos pendientes por aprobar'
+        : 'Aún no hay movimientos aprobados o rechazados') + '</li>';
+      return;
+    }
+
+    items.forEach((p, indice) => {
+      const esPendiente = p['Estado'] === 'Pendiente';
+      const monto = parseFloat(p['Monto']) || 0;
+      const tipo = p['Tipo'];
+      const fecha = p['Fecha'] ? new Date(p['Fecha']).toLocaleDateString('es-DO') : 'Sin fecha';
+      const titulo = p['Comercio'] || p['Descripcion'] || '(sin descripción)';
+
+      let badges = '';
+      if (esPendiente && esDuplicadoProbable(p)) badges += '<span class="badge-alerta prealerta">Posible duplicado</span>';
+      if (!esPendiente) {
+        badges += p['Estado'] === 'Aprobada'
+          ? '<span class="badge-alerta ok" style="background:var(--verde-fondo); color:var(--verde);">Aprobada ✓</span>'
+          : '<span class="badge-alerta exceso">Rechazada</span>';
+      }
+
+      const faltantes = [];
+      if (!p['Categoria']) faltantes.push('categoría');
+      if (!p['Cuenta']) faltantes.push('cuenta');
+      const lineaDatos = esPendiente
+        ? escaparHtml(p['Categoria'] || '⚠ sin categoría') + ' · ' + escaparHtml(p['Cuenta'] || '⚠ sin cuenta') + ' · ' + fecha
+        : escaparHtml(p['Categoria'] || '') + ' · ' + escaparHtml(p['Cuenta'] || '') + ' · ' + fecha;
+      const lineaOrigen = esPendiente
+        ? 'Origen: ' + escaparHtml(p['Fuente'] || 'manual') + ' · registrado por ' + escaparHtml(p['Creado por'] || '')
+        : (p['Estado'] === 'Aprobada' ? 'Aprobado' : 'Rechazado') + ' por ' + escaparHtml(p['Resuelto por'] || '') +
+          (p['Fecha resolucion'] ? ' · ' + new Date(p['Fecha resolucion']).toLocaleDateString('es-DO') : '');
+
+      const acciones = esPendiente ? `
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; align-items:center;">
+          <button type="button" class="guardar" onclick="aprobarPendienteUI('${p['ID']}')" style="width:auto; padding:0.45rem 0.9rem; font-size:0.82rem; background:var(--verde);">✔ Aprobar</button>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+            <button type="button" class="btn-editar-mov" onclick="editarPendiente('${p['ID']}')" title="Editar">✏️</button>
+            <button type="button" class="btn-editar-mov" onclick="rechazarPendienteUI('${p['ID']}')" title="Rechazar (descartar)">🗑️</button>
+          </div>
+        </div>` : '';
+
+      const li = document.createElement('li');
+      li.style.display = 'block';
+      if (indice < items.length - 1) {
+        li.style.borderBottom = '1px solid var(--borde)';
+        li.style.paddingBottom = '1rem';
+        li.style.marginBottom = '1rem';
+      }
+      li.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="item-info">
+            <div class="categoria fila-titulo-badge"><span class="texto-titulo">${escaparHtml(titulo)}</span>${badges}</div>
+            <div class="detalle">${lineaDatos}</div>
+            <div class="detalle">${lineaOrigen}</div>
+          </div>
+          <span class="item-monto cifra ${tipo}">${tipo === 'ingreso' ? '+' : '-'}RD$${monto.toLocaleString('es-DO', {minimumFractionDigits:2})}</span>
+        </div>
+        ${acciones}
+      `;
+      lista.appendChild(li);
+    });
+  }
+
+  // Rellena los selectores de categoria y cuenta segun el tipo elegido, sin
+  // perder lo que ya estaba seleccionado (si sigue siendo valido).
+  function actualizarSelectsPendiente(cuentaPref, categoriaPref) {
+    const tipo = document.getElementById('pendiente-campo-tipo').value;
+    const selCat = document.getElementById('pendiente-campo-categoria');
+    const selCue = document.getElementById('pendiente-campo-cuenta');
+    const catActual = categoriaPref !== undefined ? categoriaPref : selCat.value;
+    const cueActual = cuentaPref !== undefined ? cuentaPref : selCue.value;
+
+    selCat.innerHTML = '<option value="">(elige una categoría)</option>';
+    categoriasCache.filter(cat => cat['Tipo (ingreso/gasto)'] === tipo).forEach(cat => {
+      const o = document.createElement('option');
+      o.value = cat['Nombre'];
+      o.textContent = cat['Nombre'];
+      selCat.appendChild(o);
+    });
+    if (catActual && Array.from(selCat.options).some(o => o.value === catActual)) selCat.value = catActual;
+
+    const tiposPermitidos = tipo === 'ingreso'
+      ? ['Ahorro', 'Debito', 'Efectivo', 'Inversion']
+      : ['Ahorro', 'Debito', 'Efectivo', 'Tarjeta de credito'];
+    selCue.innerHTML = '<option value="">(elige una cuenta)</option>';
+    cuentasCache.filter(esCuentaActiva).filter(cu => tiposPermitidos.includes(cu['Tipo'])).forEach(cu => {
+      const o = document.createElement('option');
+      o.value = cu['Nombre'];
+      o.textContent = cu['Nombre'];
+      selCue.appendChild(o);
+    });
+    if (cueActual && Array.from(selCue.options).some(o => o.value === cueActual)) selCue.value = cueActual;
+  }
+
+  // ---- Interpretacion de texto libre (reglas simples, sin servicios externos) ----
+  const NUMEROS_UNIDADES = { cero:0, un:1, uno:1, una:1, dos:2, tres:3, cuatro:4, cinco:5, seis:6, siete:7, ocho:8, nueve:9, diez:10, once:11, doce:12, trece:13, catorce:14, quince:15, dieciseis:16, diecisiete:17, dieciocho:18, diecinueve:19, veinte:20, veintiuno:21, veintidos:22, veintitres:23, veinticuatro:24, veinticinco:25, veintiseis:26, veintisiete:27, veintiocho:28, veintinueve:29, treinta:30, cuarenta:40, cincuenta:50, sesenta:60, setenta:70, ochenta:80, noventa:90 };
+  const NUMEROS_CENTENAS = { cien:100, ciento:100, doscientos:200, trescientos:300, cuatrocientos:400, quinientos:500, seiscientos:600, setecientos:700, ochocientos:800, novecientos:900 };
+
+  // "mil quinientos" -> 1500. Solo toma la primera secuencia de palabras numericas.
+  // "un/uno/una" solo cuentan si van antes de "mil" (si no, suelen ser articulos).
+  function palabrasANumero(textoNormalizado) {
+    const t = textoNormalizado.split(/\s+/);
+    const esNum = w => (w in NUMEROS_UNIDADES) || (w in NUMEROS_CENTENAS) || w === 'mil';
+    let i = 0;
+    while (i < t.length) {
+      const w = t[i];
+      const esArticulo = (w === 'un' || w === 'uno' || w === 'una') && t[i + 1] !== 'mil';
+      if (esNum(w) && !esArticulo) break;
+      i++;
+    }
+    if (i >= t.length) return null;
+    let total = 0, actual = 0, hay = false;
+    while (i < t.length) {
+      const w = t[i];
+      if (w in NUMEROS_UNIDADES) { actual += NUMEROS_UNIDADES[w]; hay = true; }
+      else if (w in NUMEROS_CENTENAS) { actual += NUMEROS_CENTENAS[w]; hay = true; }
+      else if (w === 'mil') { total += (actual || 1) * 1000; actual = 0; hay = true; }
+      else if (w === 'y' && i + 1 < t.length && esNum(t[i + 1])) { /* "treinta y cinco": se sigue */ }
+      else break;
+      i++;
+    }
+    return hay ? total + actual : null;
+  }
+
+  function parsearNumeroTexto(token) {
+    token = token.replace(/[.,]+$/, '');
+    if (/^\d{1,3}(,\d{3})+(\.\d+)?$/.test(token)) return parseFloat(token.replace(/,/g, ''));
+    if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(token)) return parseFloat(token.replace(/\./g, '').replace(',', '.'));
+    return parseFloat(token.replace(',', '.'));
+  }
+
+  function sugerirCategoriaParaTexto(textoNormalizado, tipo) {
+    const cats = categoriasCache.filter(cat => cat['Tipo (ingreso/gasto)'] === tipo);
+    let mejor = null, mejorLargo = 0;
+    cats.forEach(cat => {
+      const n = normalizarTexto(cat['Nombre']).trim();
+      if (n.length >= 3 && textoNormalizado.includes(n) && n.length > mejorLargo) { mejor = cat; mejorLargo = n.length; }
+    });
+    if (mejor) return mejor['Nombre'];
+    for (const cat of cats) {
+      const palabras = String(cat['Palabras clave'] || '').split(',').map(p => normalizarTexto(p).trim()).filter(Boolean);
+      if (palabras.some(p => textoNormalizado.includes(p))) return cat['Nombre'];
+    }
+    return '';
+  }
+
+  function interpretarTextoMovimiento(textoOriginal) {
+    const original = String(textoOriginal || '').trim();
+    const textoNorm = normalizarTexto(original);
+    let t = textoNorm;
+    const hoy = new Date(); hoy.setHours(12, 0, 0, 0);
+
+    // Tipo: gasto salvo que haya palabras claras de ingreso
+    const palabrasIngreso = ['ingreso', 'cobre', 'cobro', 'me pagaron', 'me pago', 'me depositaron', 'me transfirieron', 'salario', 'sueldo', 'nomina', 'recibi'];
+    const tipo = palabrasIngreso.some(p => new RegExp('\\b' + p + '\\b').test(t)) ? 'ingreso' : 'gasto';
+
+    // Fecha: hoy por defecto; ayer / anteayer / hace N dias / dd/mm
+    let fecha = new Date(hoy);
+    const mFecha = t.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    const mHace = t.match(/\bhace (\d{1,2}) dias?\b/);
+    if (mFecha) {
+      const dia = parseInt(mFecha[1], 10), mes = parseInt(mFecha[2], 10);
+      let anio = mFecha[3] ? parseInt(mFecha[3], 10) : hoy.getFullYear();
+      if (anio < 100) anio += 2000;
+      const d = new Date(anio, mes - 1, dia, 12);
+      if (d.getMonth() === mes - 1 && d.getDate() === dia) fecha = d;
+      t = t.replace(mFecha[0], ' ');
+    } else if (/\bantes de ayer\b|\banteayer\b|\bantier\b/.test(t)) {
+      fecha.setDate(fecha.getDate() - 2);
+    } else if (/\bayer\b/.test(t)) {
+      fecha.setDate(fecha.getDate() - 1);
+    } else if (mHace) {
+      fecha.setDate(fecha.getDate() - parseInt(mHace[1], 10));
+      t = t.replace(mHace[0], ' ');
+    }
+
+    // Cuenta: nombre completo si aparece; si no, "efectivo"/"tarjeta"/"debito" cuando hay una sola de ese tipo
+    const tiposPermitidos = tipo === 'ingreso'
+      ? ['Ahorro', 'Debito', 'Efectivo', 'Inversion']
+      : ['Ahorro', 'Debito', 'Efectivo', 'Tarjeta de credito'];
+    const cuentasPosibles = cuentasCache.filter(esCuentaActiva).filter(cu => tiposPermitidos.includes(cu['Tipo']));
+    let cuenta = '', largoCuenta = 0;
+    cuentasPosibles.forEach(cu => {
+      const n = normalizarTexto(cu['Nombre']).trim();
+      if (n.length >= 2 && t.includes(n) && n.length > largoCuenta) { cuenta = cu['Nombre']; largoCuenta = n.length; }
+    });
+    if (cuenta) {
+      t = t.replace(normalizarTexto(cuenta).trim(), ' '); // evita confundir numeros del nombre con el monto
+    } else {
+      const unicaDeTipo = (tipoCuenta, palabra) => {
+        if (!t.includes(palabra)) return '';
+        const lista = cuentasPosibles.filter(cu => cu['Tipo'] === tipoCuenta);
+        return lista.length === 1 ? lista[0]['Nombre'] : '';
+      };
+      cuenta = unicaDeTipo('Efectivo', 'efectivo') || unicaDeTipo('Tarjeta de credito', 'tarjeta') || unicaDeTipo('Debito', 'debito') || '';
+    }
+
+    // Monto: "2 mil", digitos (1,500 / 1.500,50 / 850) o palabras ("mil quinientos")
+    let monto = 0;
+    const mMil = t.match(/(\d[\d.,]*)\s*mil\b/);
+    if (mMil) {
+      monto = parsearNumeroTexto(mMil[1]) * 1000;
+    } else {
+      const mNum = t.match(/\d[\d.,]*/);
+      if (mNum) monto = parsearNumeroTexto(mNum[0]);
+      else monto = palabrasANumero(t) || 0;
+    }
+    if (!isFinite(monto) || monto < 0) monto = 0;
+
+    // Comercio: lo que sigue a "en ..." hasta una palabra de corte
+    let comercio = '';
+    const mCom = original.match(/\ben\s+(.+?)(?=\s+(?:con|por|desde|usando|ayer|hoy|anteayer|antier|de la cuenta|de mi cuenta|de la tarjeta|de mi tarjeta)\b|[,.;]|$)/i);
+    if (mCom) {
+      comercio = mCom[1].trim().slice(0, 60);
+      const cn = normalizarTexto(comercio);
+      const esCuentaOTipo = cn === 'efectivo' || cn.startsWith('efectivo ') || cn === 'tarjeta' || cn === 'debito' ||
+        cuentasCache.some(cu => normalizarTexto(cu['Nombre']).trim() === cn);
+      if (esCuentaOTipo || /^\d+([.,]\d+)?$/.test(cn)) comercio = '';
+    }
+
+    return {
+      tipo: tipo,
+      monto: monto,
+      fecha: fechaLocalISO(fecha),
+      cuenta: cuenta,
+      categoria: sugerirCategoriaParaTexto(textoNorm, tipo),
+      comercio: comercio,
+      descripcion: original,
+      textoOriginal: original
+    };
+  }
+
+  function interpretarEntradaRapida(origen) {
+    const input = document.getElementById('pendiente-texto-rapido');
+    const texto = input.value.trim();
+    if (!texto) {
+      mostrarMensaje('Escribe o dicta el movimiento primero', 'error');
+      return;
+    }
+    const datos = interpretarTextoMovimiento(texto);
+    datos.fuente = origen === 'voz' ? 'voz' : 'texto';
+    abrirFormularioPendiente(datos, null);
+    input.value = '';
+    if (!datos.monto) mostrarMensaje('No pude detectar el monto — complétalo antes de guardar', 'error');
+  }
+
+  // ---- Dictado por voz (si el navegador lo permite) ----
+  let reconocimientoVoz = null;
+
+  function iniciarDictado() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const boton = document.getElementById('btn-dictar');
+    if (!SR) {
+      mostrarMensaje('Este navegador no permite dictar desde la app. Escribe en el cuadro y usa el micrófono del teclado de tu teléfono.', 'error');
+      document.getElementById('pendiente-texto-rapido').focus();
+      return;
+    }
+    if (reconocimientoVoz) { reconocimientoVoz.stop(); return; } // segundo clic = detener
+
+    const rec = new SR();
+    rec.lang = 'es-DO';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.continuous = false;
+    reconocimientoVoz = rec;
+    boton.textContent = '🔴';
+
+    rec.onresult = (e) => {
+      document.getElementById('pendiente-texto-rapido').value = e.results[0][0].transcript;
+      interpretarEntradaRapida('voz');
+    };
+    rec.onerror = (e) => {
+      const mensajes = {
+        'not-allowed': 'El navegador no tiene permiso para usar el micrófono. Revisa los permisos del sitio.',
+        'service-not-allowed': 'El dictado no está permitido en este navegador. Usa el micrófono del teclado.',
+        'no-speech': 'No escuché nada, intenta de nuevo.',
+        'network': 'El dictado necesita internet y falló la conexión.'
+      };
+      mostrarMensaje(mensajes[e.error] || 'No se pudo dictar (' + e.error + '). Usa el micrófono del teclado.', 'error');
+    };
+    rec.onend = () => { reconocimientoVoz = null; boton.textContent = '🎤'; };
+
+    try { rec.start(); } catch (err) { reconocimientoVoz = null; boton.textContent = '🎤'; }
+  }
+
+  // ---- Formulario de revision ----
+  function abrirFormularioPendiente(datos, id) {
+    pendienteEditandoId = id || null;
+    document.getElementById('pendiente-campo-tipo').value = datos.tipo || 'gasto';
+    document.getElementById('pendiente-campo-monto').value = datos.monto || '';
+    document.getElementById('pendiente-campo-fecha').value = datos.fecha || fechaLocalISO(new Date());
+    document.getElementById('pendiente-campo-comercio').value = datos.comercio || '';
+    document.getElementById('pendiente-campo-descripcion').value = datos.descripcion || '';
+    document.getElementById('pendiente-campo-fuente').value = datos.fuente || 'manual';
+    document.getElementById('pendiente-campo-texto-original').value = datos.textoOriginal || '';
+    actualizarSelectsPendiente(datos.cuenta || '', datos.categoria || '');
+    document.getElementById('pendiente-btn-guardar').textContent = id ? 'Guardar cambios' : 'Guardar como pendiente';
+    document.getElementById('pendiente-form-contenedor').style.display = 'block';
+    document.getElementById('form-pendiente').scrollIntoView({ behavior: 'smooth' });
+  }
+
+  function editarPendiente(id) {
+    const p = pendientesCache.find(x => String(x['ID']) === String(id));
+    if (!p) return;
+    const fecha = p['Fecha'] ? new Date(p['Fecha']) : null;
+    abrirFormularioPendiente({
+      tipo: p['Tipo'],
+      monto: p['Monto'],
+      fecha: fecha && !isNaN(fecha) ? fechaLocalISO(fecha) : '',
+      cuenta: p['Cuenta'],
+      categoria: p['Categoria'],
+      comercio: p['Comercio'],
+      descripcion: p['Descripcion'],
+      fuente: p['Fuente'],
+      textoOriginal: p['Texto original']
+    }, id);
+  }
+
+  function cancelarEdicionPendiente() {
+    pendienteEditandoId = null;
+    document.getElementById('form-pendiente').reset();
+    document.getElementById('pendiente-form-contenedor').style.display = 'none';
+  }
+
+  async function guardarPendienteForm(evento, aprobar) {
+    if (evento) evento.preventDefault();
+    const payload = {
+      tipo: document.getElementById('pendiente-campo-tipo').value,
+      monto: parseFloat(document.getElementById('pendiente-campo-monto').value),
+      fecha: document.getElementById('pendiente-campo-fecha').value,
+      categoria: document.getElementById('pendiente-campo-categoria').value,
+      cuenta: document.getElementById('pendiente-campo-cuenta').value,
+      comercio: document.getElementById('pendiente-campo-comercio').value.trim(),
+      descripcion: document.getElementById('pendiente-campo-descripcion').value.trim(),
+      fuente: document.getElementById('pendiente-campo-fuente').value || 'manual',
+      textoOriginal: document.getElementById('pendiente-campo-texto-original').value
+    };
+
+    if (!(payload.monto > 0)) { mostrarMensaje('Ingresa un monto mayor que cero', 'error'); return false; }
+    if (aprobar && (!payload.categoria || !payload.cuenta)) {
+      mostrarMensaje('Para aprobar elige la categoría y la cuenta', 'error');
+      return false;
+    }
+
+    const botones = [document.getElementById('pendiente-btn-guardar'), document.getElementById('pendiente-btn-aprobar')];
+    botones.forEach(b => b.disabled = true);
+
+    try {
+      let id = pendienteEditandoId;
+      let resp;
+      if (id) {
+        payload.id = id;
+        resp = await llamarAPI('updatePendiente', payload);
+      } else {
+        resp = await llamarAPI('addPendiente', payload);
+        if (resp.ok) id = resp.datos.id;
+      }
+      if (!resp.ok) { mostrarMensaje('Error al guardar: ' + resp.error, 'error'); return false; }
+
+      if (aprobar) {
+        const parecido = esDuplicadoProbable({ Tipo: payload.tipo, Monto: payload.monto, Fecha: payload.fecha, Cuenta: payload.cuenta });
+        if (parecido && !confirm('Ya existe un movimiento muy parecido (mismo monto y fecha cercana). ¿Aprobar de todos modos? Si cancelas, queda guardado como pendiente.')) {
+          cancelarEdicionPendiente();
+          await cargarPendientes();
+          return false;
+        }
+        const resp2 = await llamarAPI('aprobarPendiente', { id: id });
+        if (!resp2.ok) {
+          mostrarMensaje('Se guardó como pendiente, pero no se pudo aprobar: ' + resp2.error, 'error');
+          pendienteEditandoId = id;
+          await cargarPendientes();
+          return false;
+        }
+        mostrarMensaje('Movimiento aprobado y registrado', 'ok');
+        await cargarTransacciones();
+      } else {
+        mostrarMensaje(pendienteEditandoId ? 'Pendiente actualizado' : 'Guardado como pendiente', 'ok');
+      }
+      cancelarEdicionPendiente();
+      await cargarPendientes();
+      actualizarUltimaSincronizacion();
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + err.message, 'error');
+    } finally {
+      botones.forEach(b => b.disabled = false);
+    }
+    return false;
+  }
+
+  async function aprobarPendienteUI(id) {
+    const p = pendientesCache.find(x => String(x['ID']) === String(id));
+    if (!p) return;
+    if (!p['Categoria'] || !p['Cuenta']) {
+      mostrarMensaje('Falta la categoría o la cuenta — complétalas y aprueba desde el formulario', 'error');
+      editarPendiente(id);
+      return;
+    }
+    if (esDuplicadoProbable(p) && !confirm('Ya existe un movimiento muy parecido (mismo monto y fecha cercana). ¿Aprobar de todos modos?')) return;
+
+    try {
+      const resp = await llamarAPI('aprobarPendiente', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Movimiento aprobado y registrado', 'ok');
+        await cargarTransacciones();
+        await cargarPendientes();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al aprobar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo aprobar: ' + err.message, 'error');
+    }
+  }
+
+  async function rechazarPendienteUI(id) {
+    if (!confirm('¿Rechazar este movimiento? No se registrará en tus finanzas.')) return;
+    try {
+      const resp = await llamarAPI('rechazarPendiente', { id: id });
+      if (resp.ok) {
+        mostrarMensaje('Movimiento rechazado', 'ok');
+        await cargarPendientes();
+        actualizarUltimaSincronizacion();
+      } else {
+        mostrarMensaje('Error al rechazar: ' + resp.error, 'error');
+      }
+    } catch (err) {
+      mostrarMensaje('No se pudo rechazar: ' + err.message, 'error');
+    }
   }
 
   function cerrarSesion() {
