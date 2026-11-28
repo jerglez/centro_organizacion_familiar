@@ -808,6 +808,9 @@
     <div class="menu-item" data-panel="reportes" onclick="mostrarSeccion('reportes')">
       <span class="punto punto-gris"></span>Reportes
     </div>
+    <div class="menu-item" data-panel="notifpush" onclick="mostrarSeccion('notifpush')">
+      <span class="punto punto-gris"></span>Notificaciones
+    </div>
     <div class="menu-item" data-panel="usuarios" onclick="mostrarSeccion('usuarios')">
       <span class="punto punto-gris"></span>Usuarios
     </div>
@@ -1316,6 +1319,34 @@
   </section>
   </div>
 
+  <div class="panel" id="panel-notifpush">
+  <section class="bloque">
+    <h3>Notificaciones</h3>
+    <p class="vacio" style="text-align:left; margin:0 0 0.9rem;">Avisos que llegan a tu teléfono aunque la app esté cerrada. Se activan en cada dispositivo por separado.</p>
+
+    <div id="push-estado" style="padding:0.75rem 0.9rem; border-radius:8px; background:var(--teal-claro); color:var(--teal-oscuro); font-size:0.88rem; margin-bottom:0.7rem;">Revisando este dispositivo...</div>
+    <p id="push-ayuda" class="texto-sync" style="white-space:normal; margin:0 0 0.9rem; display:none;"></p>
+
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem;">
+      <button type="button" class="guardar" id="push-btn-activar" onclick="activarPush()" style="width:auto; margin:0; padding:0.55rem 1rem; display:none;">Activar en este dispositivo</button>
+      <button type="button" class="secundario" id="push-btn-prueba" onclick="enviarPruebaPush('cifrado')" style="display:none;">Enviar prueba</button>
+      <button type="button" class="secundario" id="push-btn-desactivar" onclick="desactivarPush()" style="display:none;">Desactivar aquí</button>
+    </div>
+
+    <h3 style="font-size:0.9rem; margin:1rem 0 0.4rem;">Mis dispositivos</h3>
+    <ul id="lista-dispositivos-push" style="list-style:none; margin:0; padding:0;"><li class="vacio">Cargando...</li></ul>
+    <div id="push-resultado" class="detalle" style="white-space:pre-wrap; margin-top:0.8rem;"></div>
+
+    <details style="margin-top:1rem;">
+      <summary style="cursor:pointer; font-size:0.82rem; color:var(--texto-secundario);">Diagnóstico</summary>
+      <div style="padding-top:0.6rem;">
+        <p class="texto-sync" style="white-space:normal; margin:0 0 0.5rem;">Si "Enviar prueba" falla, esta variante manda un aviso sin contenido. Sirve para saber si el problema es el cifrado del mensaje o el servicio de notificaciones del teléfono.</p>
+        <button type="button" class="secundario" onclick="enviarPruebaPush('vacio')">Enviar prueba sin contenido</button>
+      </div>
+    </details>
+  </section>
+  </div>
+
   <div class="panel" id="panel-presupuestos">
   <section class="bloque">
     <h3>Presupuestos</h3>
@@ -1751,7 +1782,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "26.0";
+  const VERSION_APP = "27.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -1853,6 +1884,7 @@
       document.getElementById('loading-screen').style.display = 'none';
       document.getElementById('app-screen').style.display = 'block';
       horaInicioSesion = Date.now();
+      abrirSeccionPedidaPorUrl();
       document.getElementById('nombre-usuario').textContent = datosUsuario.datos.nombre;
       document.getElementById('rol').textContent = datosUsuario.datos.rol;
 
@@ -1867,6 +1899,7 @@
 
       if (intervaloSincronizacion) clearInterval(intervaloSincronizacion);
       intervaloSincronizacion = setInterval(sincronizarDatos, 10000); // cada 10 segundos
+      sincronizarDispositivoPushSilencioso(); // sin esperar: no retrasa nada de lo que ves
     } catch (err) {
       mostrarErrorLogin('No se pudo conectar con la API: ' + err.message);
     }
@@ -3991,6 +4024,8 @@
     document.querySelectorAll('.menu-item[data-panel]').forEach(item => {
       item.classList.toggle('activo', item.getAttribute('data-panel') === nombre);
     });
+
+    if (nombre === 'notifpush') actualizarPanelNotificaciones();
 
     cerrarMenu();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -6664,6 +6699,272 @@
       mostrarMensaje('No se pudo rechazar: ' + err.message, 'error');
     }
   }
+
+  // ---------- Notificaciones push (este dispositivo) ----------
+  // El servidor firma y cifra cada aviso (PushWeb.gs); aqui solo se pide el
+  // permiso, se registra este dispositivo y se muestra el estado.
+  const CLAVE_PUSH_SYNC = 'pushUltimaSync';
+
+  function urlBase64AUint8Array(base64url) {
+    const relleno = '='.repeat((4 - base64url.length % 4) % 4);
+    const bruto = atob((base64url + relleno).replace(/-/g, '+').replace(/_/g, '/'));
+    const salida = new Uint8Array(bruto.length);
+    for (let i = 0; i < bruto.length; i++) salida[i] = bruto.charCodeAt(i);
+    return salida;
+  }
+
+  function bytesABase64Url(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function esDispositivoIOS() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function esAppInstalada() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+
+  function pushSoportado() {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  }
+
+  function etiquetaPlataformaPush() {
+    const ua = navigator.userAgent || '';
+    let navegador = 'Navegador';
+    if (/EdgA?\//.test(ua)) navegador = 'Edge';
+    else if (/Firefox|FxiOS/.test(ua)) navegador = 'Firefox';
+    else if (/CriOS|Chrome/.test(ua)) navegador = 'Chrome';
+    else if (/Safari/.test(ua)) navegador = 'Safari';
+    let so = 'Otro';
+    if (/iPhone/.test(ua)) so = 'iPhone';
+    else if (/iPad/.test(ua) || esDispositivoIOS()) so = 'iPad';
+    else if (/Android/.test(ua)) so = 'Android';
+    else if (/Windows/.test(ua)) so = 'Windows';
+    else if (/Mac OS X|Macintosh/.test(ua)) so = 'Mac';
+    else if (/Linux/.test(ua)) so = 'Linux';
+    return so + ' (' + navegador + ')' + (esAppInstalada() ? ' · app instalada' : '');
+  }
+
+  // Situacion de este dispositivo. Funcion pura: depende solo de lo que recibe.
+  function decidirEstadoPush(s) {
+    if (s.ios && !s.instalada) return 'ios-sin-instalar'; // en iPhone solo funciona con la app instalada
+    if (!s.soportado) return 'no-soportado';
+    if (s.permiso === 'denied') return 'bloqueado';
+    if (s.permiso === 'granted' && s.suscrito) return 'activo';
+    if (s.permiso === 'granted') return 'sin-registrar';
+    return 'inactivo';
+  }
+
+  // "ready" nunca termina si el service worker no se pudo registrar: se limita la espera.
+  function esperarServiceWorker(ms) {
+    return Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('El service worker no esta listo. Cierra y vuelve a abrir la app.')), ms))
+    ]);
+  }
+
+  async function obtenerEstadoPush() {
+    const soportado = pushSoportado();
+    let suscrito = false;
+    if (soportado) {
+      try {
+        const reg = await esperarServiceWorker(4000);
+        suscrito = !!(await reg.pushManager.getSubscription());
+      } catch (err) { /* sin service worker: se tratara como no registrado */ }
+    }
+    return decidirEstadoPush({
+      ios: esDispositivoIOS(), instalada: esAppInstalada(), soportado: soportado,
+      permiso: soportado ? Notification.permission : 'default', suscrito: suscrito
+    });
+  }
+
+  const INFO_ESTADO_PUSH = {
+    'activo': { tipo: 'ok', texto: 'Activadas en este dispositivo ✓', ayuda: '' },
+    'inactivo': { tipo: 'aviso', texto: 'No activadas en este dispositivo', ayuda: 'Toca «Activar» y acepta el permiso cuando el teléfono lo pida.' },
+    'sin-registrar': { tipo: 'aviso', texto: 'Permiso concedido, pero este dispositivo no está registrado', ayuda: 'Toca «Activar» para registrarlo.' },
+    'bloqueado': { tipo: 'error', texto: 'Las notificaciones están bloqueadas para esta app',
+      ayuda: 'Actívalas en los ajustes del teléfono: en iPhone, Ajustes → Notificaciones → busca esta app; en Android, mantén pulsado el ícono de la app → Información → Notificaciones. Luego vuelve aquí.' },
+    'ios-sin-instalar': { tipo: 'aviso', texto: 'Falta instalar la app en tu iPhone o iPad',
+      ayuda: 'En iPhone las notificaciones solo funcionan con la app instalada. En Safari toca Compartir (el cuadro con la flecha) → «Agregar a pantalla de inicio», abre la app desde ese ícono y vuelve a esta pantalla. Requiere iOS 16.4 o superior.' },
+    'no-soportado': { tipo: 'error', texto: 'Este navegador no permite notificaciones push',
+      ayuda: 'En Android usa Chrome. En iPhone necesitas iOS 16.4 o superior y la app instalada en la pantalla de inicio.' }
+  };
+
+  async function actualizarPanelNotificaciones() {
+    const estado = await obtenerEstadoPush();
+    const info = INFO_ESTADO_PUSH[estado];
+    const caja = document.getElementById('push-estado');
+    const colores = { ok: ['var(--verde-fondo)', 'var(--verde)'], aviso: ['var(--teal-claro)', 'var(--teal-oscuro)'], error: ['var(--coral-fondo)', 'var(--coral)'] }[info.tipo];
+    caja.style.background = colores[0];
+    caja.style.color = colores[1];
+    caja.textContent = info.texto;
+
+    const ayuda = document.getElementById('push-ayuda');
+    ayuda.textContent = info.ayuda;
+    ayuda.style.display = info.ayuda ? 'block' : 'none';
+
+    const puedeActivar = estado === 'inactivo' || estado === 'sin-registrar';
+    document.getElementById('push-btn-activar').style.display = puedeActivar ? 'inline-block' : 'none';
+    document.getElementById('push-btn-prueba').style.display = estado === 'activo' ? 'inline-block' : 'none';
+    document.getElementById('push-btn-desactivar').style.display = estado === 'activo' ? 'inline-block' : 'none';
+
+    cargarMisDispositivosPush();
+  }
+
+  async function cargarMisDispositivosPush() {
+    const lista = document.getElementById('lista-dispositivos-push');
+    try {
+      const resp = await llamarAPI('getMisDispositivosPush');
+      if (!resp.ok) { lista.innerHTML = '<li class="vacio">' + escaparHtml(resp.error) + '</li>'; return; }
+      if (!resp.datos.length) { lista.innerHTML = '<li class="vacio">Aún no has activado ningún dispositivo</li>'; return; }
+      const fmt = f => f ? new Date(f).toLocaleString('es-DO', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+      lista.innerHTML = resp.datos.map(d => `
+        <li style="display:block; padding:0.5rem 0; border-bottom:1px solid var(--borde);">
+          <div class="categoria fila-titulo-badge"><span class="texto-titulo">${escaparHtml(d['Plataforma'] || 'Dispositivo')}</span>
+            ${d['Estado'] === 'Activo' ? '' : '<span class="badge-alerta exceso">Inactivo</span>'}</div>
+          <div class="detalle">Alta: ${fmt(d['Fecha alta'])} · Último aviso enviado: ${fmt(d['Ultimo envio OK'])}</div>
+          ${d['Ultimo error'] ? '<div class="detalle" style="color:var(--coral);">Último error: ' + escaparHtml(d['Ultimo error']) + '</div>' : ''}
+        </li>`).join('');
+    } catch (err) {
+      lista.innerHTML = '<li class="vacio">No se pudo cargar la lista</li>';
+    }
+  }
+
+  async function activarPush() {
+    // Aviso a iPhone: el permiso se pide en el MISMO toque, antes de cualquier
+    // espera de red; si no, Safari puede rechazarlo por no venir de un gesto.
+    if (esDispositivoIOS() && !esAppInstalada()) { await actualizarPanelNotificaciones(); return; }
+    if (!pushSoportado()) { await actualizarPanelNotificaciones(); return; }
+
+    let permiso = Notification.permission;
+    if (permiso === 'default') permiso = await Notification.requestPermission();
+    if (permiso !== 'granted') {
+      mostrarMensaje('No se concedió el permiso de notificaciones', 'error');
+      await actualizarPanelNotificaciones();
+      return;
+    }
+
+    const boton = document.getElementById('push-btn-activar');
+    boton.disabled = true;
+    boton.textContent = 'Activando...';
+    try {
+      const respClave = await llamarAPI('getVapidPublicKey');
+      if (!respClave.ok) throw new Error(respClave.error);
+      const clave = respClave.datos.clave;
+
+      const reg = await esperarServiceWorker(8000);
+      let sus = await reg.pushManager.getSubscription();
+      // Si la suscripcion existente es de OTRA clave del servidor, no sirve: se renueva.
+      if (sus && sus.options && sus.options.applicationServerKey && bytesABase64Url(sus.options.applicationServerKey) !== clave) {
+        await sus.unsubscribe();
+        sus = null;
+      }
+      if (!sus) sus = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64AUint8Array(clave) });
+
+      const resp = await llamarAPI('registrarDispositivoPush', { suscripcion: sus.toJSON(), plataforma: etiquetaPlataformaPush() });
+      if (!resp.ok) throw new Error(resp.error);
+      try { localStorage.setItem(CLAVE_PUSH_SYNC, String(Date.now())); } catch (e) { /* no es critico */ }
+      mostrarMensaje('Notificaciones activadas en este dispositivo', 'ok');
+    } catch (err) {
+      mostrarMensaje('No se pudo activar: ' + (err.message || err), 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Activar en este dispositivo';
+      await actualizarPanelNotificaciones();
+    }
+  }
+
+  async function desactivarPush() {
+    if (!confirm('¿Dejar de recibir notificaciones en este dispositivo?')) return;
+    try {
+      const reg = await esperarServiceWorker(8000);
+      const sus = await reg.pushManager.getSubscription();
+      if (sus) {
+        const endpoint = sus.endpoint;
+        await sus.unsubscribe();
+        await llamarAPI('eliminarDispositivoPush', { endpoint: endpoint });
+      }
+      try { localStorage.removeItem(CLAVE_PUSH_SYNC); } catch (e) { /* no es critico */ }
+      mostrarMensaje('Notificaciones desactivadas en este dispositivo', 'ok');
+    } catch (err) {
+      mostrarMensaje('No se pudo desactivar: ' + (err.message || err), 'error');
+    }
+    await actualizarPanelNotificaciones();
+  }
+
+  async function enviarPruebaPush(modo) {
+    const resultado = document.getElementById('push-resultado');
+    resultado.textContent = 'Enviando...';
+    try {
+      const resp = await llamarAPI('enviarPushPrueba', { modo: modo });
+      if (!resp.ok) { resultado.textContent = 'Error: ' + resp.error; return; }
+      const lineas = resp.datos.resultados.map(r =>
+        (r.ok ? '✓ ' : '✗ ') + r.plataforma + ' — ' + (r.ok ? 'enviado (código ' + r.codigo + ')' : 'falló (código ' + r.codigo + ') ' + (r.detalle || '')));
+      resultado.textContent = 'Prueba (' + resp.datos.modo + '):\n' + lineas.join('\n') +
+        '\n\n"Enviado" significa que el servicio de notificaciones lo aceptó. Si no aparece en el teléfono en unos segundos, cuéntale a quien administra la app el resultado de arriba.';
+      cargarMisDispositivosPush();
+    } catch (err) {
+      resultado.textContent = 'No se pudo enviar: ' + (err.message || err);
+    }
+  }
+
+  // Una vez al dia, en segundo plano: renueva el registro de este dispositivo
+  // (los telefonos a veces cambian el endpoint) y la clave si el servidor la cambio.
+  async function sincronizarDispositivoPushSilencioso() {
+    try {
+      if (!pushSoportado() || Notification.permission !== 'granted') return;
+      const ultima = parseInt(localStorage.getItem(CLAVE_PUSH_SYNC) || '0', 10);
+      if (Date.now() - ultima < 24 * 3600 * 1000) return;
+      const reg = await esperarServiceWorker(8000);
+      let sus = await reg.pushManager.getSubscription();
+      if (!sus) return;
+      const respClave = await llamarAPI('getVapidPublicKey');
+      if (!respClave.ok) return;
+      const clave = respClave.datos.clave;
+      if (sus.options && sus.options.applicationServerKey && bytesABase64Url(sus.options.applicationServerKey) !== clave) {
+        await sus.unsubscribe();
+        sus = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64AUint8Array(clave) });
+      }
+      const resp = await llamarAPI('registrarDispositivoPush', { suscripcion: sus.toJSON(), plataforma: etiquetaPlataformaPush() });
+      if (resp.ok) localStorage.setItem(CLAVE_PUSH_SYNC, String(Date.now()));
+    } catch (err) {
+      console.log('Sincronizacion de notificaciones omitida:', err);
+    }
+  }
+
+  // Al tocar un aviso del telefono se abre la app en la seccion indicada.
+  function abrirPanelSiExiste(nombre) {
+    if (nombre && /^[a-z]+$/.test(nombre) && document.getElementById('panel-' + nombre)) mostrarSeccion(nombre);
+  }
+
+  function abrirSeccionPedidaPorUrl() {
+    try {
+      const nombre = new URLSearchParams(window.location.search).get('abrir');
+      if (nombre) {
+        abrirPanelSiExiste(nombre);
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    } catch (err) { /* sin parametro o navegador sin soporte */ }
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (evento) => {
+      if (evento.data && evento.data.tipo === 'abrir') {
+        try { abrirPanelSiExiste(new URL(evento.data.url).searchParams.get('abrir')); } catch (err) { /* url no valida */ }
+      }
+    });
+  }
+
+  // Al volver de los ajustes del telefono (donde se desbloquean las notificaciones),
+  // el panel se actualiza solo.
+  document.addEventListener('visibilitychange', () => {
+    const panel = document.getElementById('panel-notifpush');
+    if (!document.hidden && panel && panel.classList.contains('activo')) actualizarPanelNotificaciones();
+  });
 
   function cerrarSesion() {
     tokenActual = null;

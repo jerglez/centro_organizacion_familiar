@@ -3,7 +3,7 @@
 // solo cacheamos el "cascaron" de la app (el HTML, el manifest y los iconos)
 // para que abra rapido y sea instalable. Los datos siempre vienen en vivo.
 
-const NOMBRE_CACHE = "centro-familiar-v34";
+const NOMBRE_CACHE = "centro-familiar-v35";
 const ARCHIVOS_CASCARON = [
   "./index.html",
   "./manifest.json",
@@ -72,4 +72,46 @@ self.addEventListener("fetch", (evento) => {
       return respuestaCache || fetch(evento.request);
     })
   );
+});
+
+// ---------- Notificaciones push ----------
+// El servidor envia el mensaje cifrado (titulo, cuerpo, url, tag). Aqui solo se
+// muestra. IMPORTANTE: siempre se muestra algo. En iPhone, un push que no
+// termina en una notificacion visible hace que el sistema cancele la
+// suscripcion, asi que ante cualquier fallo se usa un texto generico.
+self.addEventListener("push", (evento) => {
+  let datos = {};
+  try {
+    if (evento.data) datos = evento.data.json();
+  } catch (e1) {
+    try { datos = { cuerpo: evento.data.text() }; } catch (e2) { datos = {}; }
+  }
+  const titulo = datos.titulo || "Centro Familiar";
+  const opciones = {
+    body: datos.cuerpo || "Tienes avisos nuevos. Abre la app para verlos.",
+    icon: "./icon-192.png",
+    badge: "./icon-192.png",
+    tag: datos.tag || "centro-familiar",
+    data: { url: datos.url || "./" }
+  };
+  evento.waitUntil(self.registration.showNotification(titulo, opciones));
+});
+
+// Al tocar el aviso: si la app ya esta abierta se enfoca y se le dice que abra
+// la seccion pedida; si no, se abre una ventana nueva en esa direccion.
+self.addEventListener("notificationclick", (evento) => {
+  evento.notification.close();
+  const datos = evento.notification.data || {};
+  const destino = new URL(datos.url || "./", self.registration.scope).href;
+  evento.waitUntil((async () => {
+    const ventanas = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const ventana of ventanas) {
+      if (ventana.url.indexOf(self.registration.scope) === 0) {
+        await ventana.focus();
+        ventana.postMessage({ tipo: "abrir", url: destino });
+        return;
+      }
+    }
+    await self.clients.openWindow(destino);
+  })());
 });
