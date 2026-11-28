@@ -198,6 +198,8 @@
   }
   .menu-item:hover { background: var(--fondo); }
   .menu-item.activo { background: var(--teal-claro); color: var(--teal-oscuro); font-weight: 600; }
+  .campo-pref { width: 100%; padding: 0.55rem 0.6rem; border-radius: 8px; border: 1px solid var(--borde); background: var(--superficie); color: var(--texto); font-size: 0.9rem; font-family: inherit; }
+  .etiqueta-pref { display: block; font-size: 0.82rem; color: var(--texto-secundario); margin-bottom: 4px; }
   .badge-menu { margin-left: auto; background: var(--coral); color: #fff; font-size: 0.66rem; font-weight: 700; border-radius: 999px; min-width: 18px; height: 18px; padding: 0 5px; align-items: center; justify-content: center; }
   .menu-item.proximamente { color: var(--texto-secundario); cursor: default; }
   .menu-item.proximamente:hover { background: none; }
@@ -1337,6 +1339,32 @@
     <ul id="lista-dispositivos-push" style="list-style:none; margin:0; padding:0;"><li class="vacio">Cargando...</li></ul>
     <div id="push-resultado" class="detalle" style="white-space:pre-wrap; margin-top:0.8rem;"></div>
 
+    <h3 style="font-size:0.9rem; margin:1.25rem 0 0.5rem;">Mis preferencias</h3>
+    <div id="prefs-notif">
+      <label for="pref-nivel" class="etiqueta-pref">Detalle de los avisos urgentes en el teléfono</label>
+      <select id="pref-nivel" class="campo-pref">
+        <option value="Completo">Con montos</option>
+        <option value="SinMontos">Con nombres, sin montos (recomendado)</option>
+        <option value="Generico">Texto genérico</option>
+      </select>
+      <p class="texto-sync" style="white-space:normal; margin:0.4rem 0 1rem;">Es urgente un pago vencido o a 2 días o menos, un presupuesto superado, o un movimiento por aprobar que llega de forma automática. De 10:00 p. m. a 7:00 a. m. no suena nada: lo urgente de la noche llega a las 7:00.</p>
+
+      <label class="etiqueta-pref" style="display:flex; align-items:center; gap:8px; font-size:0.9rem; color:var(--texto);">
+        <input type="checkbox" id="pref-resumen" onchange="alternarDetalleResumen()" style="width:auto; margin:0;"> Recibir un resumen semanal por correo
+      </label>
+      <div id="pref-resumen-detalle" style="display:none; margin-top:0.6rem;">
+        <div style="display:flex; gap:0.5rem;">
+          <select id="pref-dia" class="campo-pref" style="flex:1;" aria-label="Día de la semana"></select>
+          <select id="pref-hora" class="campo-pref" style="flex:1;" aria-label="Hora"></select>
+        </div>
+        <p id="pref-correo-destino" class="texto-sync" style="white-space:normal; margin:0.4rem 0;"></p>
+        <button type="button" class="secundario" id="pref-btn-resumen-prueba" onclick="enviarResumenPrueba()">Enviar resumen de prueba ahora</button>
+      </div>
+      <div style="margin-top:1rem;">
+        <button type="button" class="guardar" id="pref-btn-guardar" onclick="guardarPreferenciasNotif()" style="width:auto; margin:0; padding:0.55rem 1rem;">Guardar preferencias</button>
+      </div>
+    </div>
+
     <details style="margin-top:1rem;">
       <summary style="cursor:pointer; font-size:0.82rem; color:var(--texto-secundario);">Diagnóstico</summary>
       <div style="padding-top:0.6rem;">
@@ -1782,7 +1810,7 @@
 
   // Solo tu actualizas este numero (version semantica); la fecha ya no se escribe a mano,
   // se calcula sola con document.lastModified (la fecha real con la que GitHub sirvio el archivo).
-  const VERSION_APP = "27.0";
+  const VERSION_APP = "28.0";
 
   const fechaModificacion = new Date(document.lastModified);
   const fechaFormateada = fechaModificacion.toLocaleString('es-DO', {
@@ -6813,6 +6841,7 @@
     document.getElementById('push-btn-desactivar').style.display = estado === 'activo' ? 'inline-block' : 'none';
 
     cargarMisDispositivosPush();
+    cargarPreferenciasNotif();
   }
 
   async function cargarMisDispositivosPush() {
@@ -6965,6 +6994,88 @@
     const panel = document.getElementById('panel-notifpush');
     if (!document.hidden && panel && panel.classList.contains('activo')) actualizarPanelNotificaciones();
   });
+
+  // ---------- Preferencias de avisos: nivel de detalle y resumen semanal ----------
+  const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+  function etiquetaHora(h) {
+    return (h % 12 === 0 ? 12 : h % 12) + ':00 ' + (h < 12 ? 'a. m.' : 'p. m.');
+  }
+
+  function prepararSelectoresPreferencias() {
+    const dia = document.getElementById('pref-dia'), hora = document.getElementById('pref-hora');
+    if (dia.options.length) return; // ya estan llenos
+    DIAS_SEMANA.forEach((nombre, i) => {
+      const o = document.createElement('option');
+      o.value = String(i); o.textContent = nombre;
+      dia.appendChild(o);
+    });
+    for (let h = 0; h < 24; h++) {
+      const o = document.createElement('option');
+      o.value = String(h); o.textContent = etiquetaHora(h);
+      hora.appendChild(o);
+    }
+  }
+
+  function alternarDetalleResumen() {
+    document.getElementById('pref-resumen-detalle').style.display = document.getElementById('pref-resumen').checked ? 'block' : 'none';
+  }
+
+  // Se lanza sin esperarla desde el panel de notificaciones: TODO queda dentro del
+  // try, para que un fallo aqui nunca pueda afectar al resto del panel.
+  async function cargarPreferenciasNotif() {
+    try {
+      prepararSelectoresPreferencias();
+      const resp = await llamarAPI('getMisPreferenciasNotif');
+      if (!resp.ok) { mostrarMensaje('No se pudieron cargar tus preferencias: ' + resp.error, 'error'); return; }
+      const p = resp.datos;
+      document.getElementById('pref-nivel').value = p.nivel;
+      document.getElementById('pref-resumen').checked = p.resumenSemanal === true;
+      document.getElementById('pref-dia').value = String(p.dia);
+      document.getElementById('pref-hora').value = String(p.hora);
+      document.getElementById('pref-correo-destino').textContent = p.emailDestino
+        ? 'Se enviará a ' + p.emailDestino + (p.usaCorreoDeNotificaciones ? ' (tu correo de notificaciones).' : ' (tu correo de inicio de sesión).')
+        : 'Tu usuario no tiene un correo válido para recibir el resumen.';
+      alternarDetalleResumen();
+    } catch (err) { /* sin conexion: el formulario se queda como esta */ }
+  }
+
+  async function guardarPreferenciasNotif() {
+    const boton = document.getElementById('pref-btn-guardar');
+    boton.disabled = true;
+    boton.textContent = 'Guardando...';
+    try {
+      const resp = await llamarAPI('guardarMisPreferenciasNotif', {
+        nivel: document.getElementById('pref-nivel').value,
+        resumenSemanal: document.getElementById('pref-resumen').checked,
+        dia: parseInt(document.getElementById('pref-dia').value, 10),
+        hora: parseInt(document.getElementById('pref-hora').value, 10)
+      });
+      if (resp.ok) mostrarMensaje('Preferencias guardadas', 'ok');
+      else mostrarMensaje('No se pudo guardar: ' + resp.error, 'error');
+    } catch (err) {
+      mostrarMensaje('No se pudo guardar: ' + (err.message || err), 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Guardar preferencias';
+    }
+  }
+
+  async function enviarResumenPrueba() {
+    const boton = document.getElementById('pref-btn-resumen-prueba');
+    boton.disabled = true;
+    boton.textContent = 'Enviando...';
+    try {
+      const resp = await llamarAPI('enviarResumenSemanalPrueba');
+      if (resp.ok) mostrarMensaje('Resumen enviado a ' + resp.datos.enviadoA + '. Revisa tu bandeja (y la carpeta de spam).', 'ok');
+      else mostrarMensaje('No se pudo enviar: ' + resp.error, 'error');
+    } catch (err) {
+      mostrarMensaje('No se pudo enviar: ' + (err.message || err), 'error');
+    } finally {
+      boton.disabled = false;
+      boton.textContent = 'Enviar resumen de prueba ahora';
+    }
+  }
 
   function cerrarSesion() {
     tokenActual = null;
